@@ -1,0 +1,39 @@
+{
+  "name": "@percepta/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:migrate:create": "tsx src/db/create-migration.ts"
+  },
+  "dependencies": {
+    "@percepta/shared": "*",
+    "fastify": "^5.2.0",
+    "@fastify/cors": "^10.0.0",
+    "@fastify/jwt": "^9.0.0",
+    "@fastify/websocket": "^11.0.0",
+    "pg": "^8.13.0",
+    "drizzle-orm": "^0.38.0",
+    "bullmq": "^5.30.0",
+    "ioredis": "^5.4.0",
+    "socket.io": "^4.8.0",
+    "bcrypt": "^5.1.1",
+    "zod": "^3.24.0",
+    "dotenv": "^16.4.0",
+    "pino": "^9.6.0"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/pg": "^8.11.0",
+    "drizzle-kit": "^0.30.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

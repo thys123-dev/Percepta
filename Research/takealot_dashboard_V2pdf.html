@@ -1,0 +1,3020 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Takealot Seller Profitability Dashboard - Strategic Plan</title>
+    <style>
+        @page {
+            margin: 2cm;
+            size: A4;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #222;
+            background: white;
+            max-width: 210mm;
+            margin: 0 auto;
+            padding: 20mm;
+        }
+        
+        .cover-page {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            page-break-after: always;
+            margin: -20mm;
+            padding: 20mm;
+        }
+        
+        .cover-page h1 {
+            font-size: 48pt;
+            font-weight: 800;
+            margin-bottom: 20pt;
+            line-height: 1.2;
+        }
+        
+        .cover-page .subtitle {
+            font-size: 24pt;
+            font-weight: 300;
+            margin-bottom: 40pt;
+            opacity: 0.95;
+        }
+        
+        .cover-page .meta {
+            font-size: 14pt;
+            margin-top: 60pt;
+            opacity: 0.8;
+        }
+        
+        .toc {
+            page-break-after: always;
+            padding: 40pt 0;
+        }
+        
+        .toc h2 {
+            font-size: 32pt;
+            margin-bottom: 30pt;
+            color: #667eea;
+        }
+        
+        .toc-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10pt 0;
+            border-bottom: 1px dotted #ccc;
+            font-size: 12pt;
+        }
+        
+        .toc-item.major {
+            font-weight: bold;
+            font-size: 14pt;
+            margin-top: 15pt;
+            color: #667eea;
+        }
+        
+        .section {
+            page-break-before: always;
+            padding-top: 20pt;
+        }
+        
+        h1 {
+            font-size: 28pt;
+            color: #667eea;
+            margin-bottom: 15pt;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10pt;
+        }
+        
+        h2 {
+            font-size: 20pt;
+            color: #764ba2;
+            margin-top: 25pt;
+            margin-bottom: 12pt;
+        }
+        
+        h3 {
+            font-size: 16pt;
+            color: #333;
+            margin-top: 20pt;
+            margin-bottom: 10pt;
+        }
+        
+        h4 {
+            font-size: 13pt;
+            color: #555;
+            margin-top: 15pt;
+            margin-bottom: 8pt;
+        }
+        
+        p {
+            margin-bottom: 10pt;
+            text-align: justify;
+            font-size: 11pt;
+        }
+        
+        .highlight-box {
+            background: #f0f4ff;
+            border-left: 4px solid #667eea;
+            padding: 15pt;
+            margin: 15pt 0;
+            border-radius: 4px;
+        }
+        
+        .warning-box {
+            background: #fff3cd;
+            border-left: 4px solid #ff9800;
+            padding: 15pt;
+            margin: 15pt 0;
+            border-radius: 4px;
+        }
+        
+        .success-box {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15pt;
+            margin: 15pt 0;
+            border-radius: 4px;
+        }
+        
+        .danger-box {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 15pt;
+            margin: 15pt 0;
+            border-radius: 4px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15pt 0;
+            font-size: 10pt;
+        }
+        
+        th {
+            background: #667eea;
+            color: white;
+            padding: 10pt;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        td {
+            padding: 8pt 10pt;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        .metric-card {
+            display: inline-block;
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            padding: 15pt;
+            margin: 10pt;
+            text-align: center;
+            min-width: 150pt;
+        }
+        
+        .metric-value {
+            font-size: 28pt;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .metric-label {
+            font-size: 10pt;
+            color: #666;
+            margin-top: 5pt;
+        }
+        
+        .ui-mockup {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 15pt;
+            margin: 20pt 0;
+            background: #f8f9fa;
+        }
+        
+        .dashboard-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20pt;
+            border-radius: 8px 8px 0 0;
+            margin: -15pt -15pt 15pt -15pt;
+        }
+        
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150pt, 1fr));
+            gap: 15pt;
+            margin: 15pt 0;
+        }
+        
+        .stat-item {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 12pt;
+        }
+        
+        .stat-item .value {
+            font-size: 20pt;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-item .label {
+            font-size: 9pt;
+            color: #666;
+            margin-top: 4pt;
+        }
+        
+        .product-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr;
+            gap: 10pt;
+            padding: 10pt;
+            border-bottom: 1px solid #ddd;
+            font-size: 9pt;
+        }
+        
+        .product-row.header {
+            background: #667eea;
+            color: white;
+            font-weight: bold;
+            border-radius: 4px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 3pt 8pt;
+            border-radius: 12px;
+            font-size: 8pt;
+            font-weight: bold;
+        }
+        
+        .status-good {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-danger {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .flowchart {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            margin: 20pt 0;
+            flex-wrap: wrap;
+        }
+        
+        .flow-box {
+            background: #667eea;
+            color: white;
+            padding: 15pt;
+            border-radius: 8px;
+            text-align: center;
+            min-width: 120pt;
+            margin: 10pt;
+        }
+        
+        .flow-arrow {
+            font-size: 24pt;
+            color: #667eea;
+        }
+        
+        .code-block {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 15pt;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 9pt;
+            overflow-x: auto;
+            margin: 15pt 0;
+        }
+        
+        .waterfall-chart {
+            margin: 20pt 0;
+        }
+        
+        .waterfall-bar {
+            display: flex;
+            align-items: center;
+            margin: 8pt 0;
+            font-size: 10pt;
+        }
+        
+        .waterfall-label {
+            width: 150pt;
+            font-weight: 500;
+        }
+        
+        .waterfall-visual {
+            flex: 1;
+            height: 30pt;
+            background: #667eea;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            padding: 0 10pt;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .waterfall-visual.negative {
+            background: #dc3545;
+        }
+        
+        .waterfall-visual.positive {
+            background: #28a745;
+        }
+        
+        ul, ol {
+            margin: 10pt 0 10pt 25pt;
+        }
+        
+        li {
+            margin: 5pt 0;
+            font-size: 11pt;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200pt, 1fr));
+            gap: 15pt;
+            margin: 20pt 0;
+        }
+        
+        .feature-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15pt;
+            transition: all 0.3s;
+        }
+        
+        .feature-card h4 {
+            color: #667eea;
+            margin-top: 0;
+        }
+        
+        .icon {
+            font-size: 24pt;
+            margin-bottom: 10pt;
+        }
+        
+        .pricing-table {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180pt, 1fr));
+            gap: 15pt;
+            margin: 20pt 0;
+        }
+        
+        .pricing-tier {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 20pt;
+            text-align: center;
+            background: white;
+        }
+        
+        .pricing-tier.featured {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #f0f4ff 0%, #fff 100%);
+            transform: scale(1.05);
+        }
+        
+        .tier-name {
+            font-size: 18pt;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10pt;
+        }
+        
+        .tier-price {
+            font-size: 32pt;
+            font-weight: bold;
+            color: #333;
+            margin: 15pt 0;
+        }
+        
+        .tier-price small {
+            font-size: 12pt;
+            color: #666;
+        }
+        
+        .tier-features {
+            text-align: left;
+            margin-top: 15pt;
+        }
+        
+        .tier-features li {
+            padding: 5pt 0;
+            font-size: 10pt;
+        }
+        
+        @media print {
+            body {
+                max-width: 100%;
+                padding: 0;
+            }
+            
+            .section {
+                page-break-before: always;
+            }
+            
+            .no-break {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- COVER PAGE -->
+    <div class="cover-page">
+        <h1>Takealot Seller<br>Profitability Dashboard</h1>
+        <div class="subtitle">Complete Strategic Plan & Technical Specification</div>
+        <div style="margin-top: 40pt; font-size: 18pt;">
+            Real-Time Profit Intelligence for Takealot Marketplace Sellers
+        </div>
+        <div class="meta">
+            <div>Strategic Business & Technical Document</div>
+            <div>Version 1.0 | January 2026</div>
+        </div>
+    </div>
+
+    <!-- TABLE OF CONTENTS -->
+    <div class="toc">
+        <h2>Table of Contents</h2>
+        <div class="toc-item major"><span>Executive Summary</span><span>3</span></div>
+        <div class="toc-item"><span>Problem Statement</span><span>3</span></div>
+        <div class="toc-item"><span>Market Opportunity</span><span>4</span></div>
+        
+        <div class="toc-item major"><span>1. Solution Overview</span><span>5</span></div>
+        <div class="toc-item"><span>Core Value Proposition</span><span>5</span></div>
+        <div class="toc-item"><span>Product Vision</span><span>6</span></div>
+        
+        <div class="toc-item major"><span>2. Technical Architecture</span><span>7</span></div>
+        <div class="toc-item"><span>System Architecture</span><span>7</span></div>
+        <div class="toc-item"><span>Data Flow</span><span>8</span></div>
+        <div class="toc-item"><span>Technology Stack</span><span>9</span></div>
+        
+        <div class="toc-item major"><span>3. API Integration Strategy</span><span>10</span></div>
+        <div class="toc-item"><span>Available API Endpoints</span><span>10</span></div>
+        <div class="toc-item"><span>Data Acquisition Plans</span><span>11</span></div>
+        <div class="toc-item"><span>Webhook Implementation</span><span>12</span></div>
+        
+        <div class="toc-item major"><span>4. Feature Specifications</span><span>13</span></div>
+        <div class="toc-item"><span>Core Dashboard Features</span><span>13</span></div>
+        <div class="toc-item"><span>Advanced Features</span><span>17</span></div>
+        <div class="toc-item"><span>UI/UX Mockups</span><span>18</span></div>
+        
+        <div class="toc-item major"><span>5. Implementation Roadmap</span><span>22</span></div>
+        <div class="toc-item"><span>Phase 1: MVP</span><span>22</span></div>
+        <div class="toc-item"><span>Phase 2-4: Growth</span><span>23</span></div>
+        
+        <div class="toc-item major"><span>6. Monetization Strategy</span><span>24</span></div>
+        <div class="toc-item"><span>Pricing Tiers</span><span>24</span></div>
+        <div class="toc-item"><span>Revenue Projections</span><span>25</span></div>
+        
+        <div class="toc-item major"><span>7. Go-to-Market Plan</span><span>26</span></div>
+        <div class="toc-item major"><span>8. Risk Mitigation</span><span>27</span></div>
+        <div class="toc-item major"><span>9. Success Metrics</span><span>28</span></div>
+    </div>
+
+    <!-- EXECUTIVE SUMMARY -->
+    <div class="section">
+        <h1>Executive Summary</h1>
+        
+        <div class="highlight-box">
+            <h3>The Opportunity</h3>
+            <p><strong>Takealot sellers are operating blind.</strong> They see revenue but have no clear visibility into actual profitability. By the time they discover a product is losing money, they've already restocked it three times.</p>
+        </div>
+        
+        <h2>Problem Statement</h2>
+        <p>Currently, Takealot marketplace sellers determine profitability through a manual, time-consuming process:</p>
+        
+        <ol>
+            <li><strong>Export CSV files</strong> from the Takealot Seller Portal containing sales, orders, and fees</li>
+            <li><strong>Build complex spreadsheets</strong> with manual formulas to calculate margins</li>
+            <li><strong>Manually input COGS</strong> (Cost of Goods Sold) for each product</li>
+            <li><strong>Reconcile fees</strong> across multiple transaction types</li>
+            <li><strong>Discover losses retrospectively</strong> - often weeks after restocking unprofitable products</li>
+        </ol>
+        
+        <div class="warning-box">
+            <strong>⏱️ Time Cost:</strong> The average seller spends 2-3 hours per week on profitability analysis
+            <br><strong>💸 Financial Cost:</strong> Hidden losses average R850-R2,400 per month per seller on products they didn't know were unprofitable
+        </div>
+        
+        <h2>Market Opportunity</h2>
+        
+        <div class="stat-grid">
+            <div class="stat-item">
+                <div class="value">15,000+</div>
+                <div class="label">Active Takealot Sellers</div>
+            </div>
+            <div class="stat-item">
+                <div class="value">R850-2.4k</div>
+                <div class="label">Avg Hidden Losses/Month</div>
+            </div>
+            <div class="stat-item">
+                <div class="value">2-3 hrs</div>
+                <div class="label">Weekly Manual Work</div>
+            </div>
+            <div class="stat-item">
+                <div class="value">0</div>
+                <div class="label">Real-Time Tools Available</div>
+            </div>
+        </div>
+        
+        <div class="success-box">
+            <h3>Our Solution</h3>
+            <p>A <strong>real-time profitability dashboard</strong> that automatically syncs with Takealot's API and webhooks to provide instant profit visibility, proactive loss prevention alerts, and AI-powered pricing optimization—with zero manual data entry.</p>
+            <p><strong>The Hook:</strong> "See your real profit on every sale, in real-time. No spreadsheets. No surprises."</p>
+        </div>
+        
+        <h2>What Makes This Irresistible</h2>
+        
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="icon">⚡</div>
+                <h4>Real-Time Profitability</h4>
+                <p>See profit on every sale within seconds of order placement via webhooks</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🚨</div>
+                <h4>Loss Prevention Alerts</h4>
+                <p>Get notified before restocking products that are losing money</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🎯</div>
+                <h4>Price Optimization</h4>
+                <p>AI-powered recommendations to maximize profit while winning the Buy Box</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">📊</div>
+                <h4>Zero Manual Work</h4>
+                <p>Fully automated sync—no CSV exports, no spreadsheet formulas</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">💡</div>
+                <h4>Actionable Intelligence</h4>
+                <p>Not just data—specific recommendations on what to do next</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🔮</div>
+                <h4>Predictive Analytics</h4>
+                <p>Forecast upcoming fees, storage costs, and cash flow</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- SOLUTION OVERVIEW -->
+    <div class="section">
+        <h1>1. Solution Overview</h1>
+        
+        <h2>Core Value Proposition</h2>
+        
+        <div class="highlight-box">
+            <p style="font-size: 14pt; font-weight: bold; margin-bottom: 15pt;">
+                "We turn Takealot revenue data into profit intelligence, automatically."
+            </p>
+            <p>Instead of spending hours in spreadsheets discovering losses after they've occurred, sellers get instant visibility into what's actually profitable—and specific actions to improve margins.</p>
+        </div>
+        
+        <h3>The "Aha!" Moment</h3>
+        <p>Within 60 seconds of connecting their Takealot account, sellers see:</p>
+        
+        <div class="ui-mockup">
+            <div class="dashboard-header">
+                <h3 style="margin:0; font-size: 16pt;">Your First Profitability Scan Complete</h3>
+            </div>
+            <div style="padding: 15pt; background: white; border-radius: 0 0 8px 8px;">
+                <div style="font-size: 24pt; font-weight: bold; color: #28a745; margin-bottom: 10pt;">
+                    ✅ You made R12,450 last month
+                </div>
+                <div style="font-size: 18pt; font-weight: bold; color: #dc3545; margin-bottom: 15pt;">
+                    ⚠️ But you LOST R850 on these 4 products you didn't know about:
+                </div>
+                <table>
+                    <tr>
+                        <th>Product</th>
+                        <th>Units Sold</th>
+                        <th>Loss Per Sale</th>
+                        <th>Total Loss</th>
+                    </tr>
+                    <tr style="background: #ffebee;">
+                        <td>Wireless Mouse X200</td>
+                        <td>12</td>
+                        <td style="color: #dc3545; font-weight: bold;">-R30.88</td>
+                        <td style="color: #dc3545; font-weight: bold;">-R370.56</td>
+                    </tr>
+                    <tr style="background: #ffebee;">
+                        <td>Phone Case Blue</td>
+                        <td>8</td>
+                        <td style="color: #dc3545; font-weight: bold;">-R22.40</td>
+                        <td style="color: #dc3545; font-weight: bold;">-R179.20</td>
+                    </tr>
+                    <tr style="background: #ffebee;">
+                        <td>USB-C Hub 7-Port</td>
+                        <td>5</td>
+                        <td style="color: #dc3545; font-weight: bold;">-R45.00</td>
+                        <td style="color: #dc3545; font-weight: bold;">-R225.00</td>
+                    </tr>
+                    <tr style="background: #ffebee;">
+                        <td>Earbuds BT5.0</td>
+                        <td>6</td>
+                        <td style="color: #dc3545; font-weight: bold;">-R12.54</td>
+                        <td style="color: #dc3545; font-weight: bold;">-R75.24</td>
+                    </tr>
+                </table>
+                <div style="margin-top: 15pt; padding: 15pt; background: #fff3cd; border-radius: 6px;">
+                    <strong>💡 If you restock these products, you'll lose another R850+ next month.</strong>
+                    <br>Click below to see optimization recommendations.
+                </div>
+            </div>
+        </div>
+        
+        <p><strong>This single moment creates a customer for life.</strong> They immediately understand the value and see concrete savings.</p>
+        
+        <h2>Product Vision</h2>
+        
+        <h3>Primary Use Cases</h3>
+        
+        <table>
+            <tr>
+                <th>User Type</th>
+                <th>Primary Need</th>
+                <th>Solution Provided</th>
+            </tr>
+            <tr>
+                <td><strong>New Sellers</strong><br>(0-50 products)</td>
+                <td>Don't know if they're profitable; overwhelmed by fees</td>
+                <td>Instant profitability visibility from day 1; avoid beginner mistakes</td>
+            </tr>
+            <tr>
+                <td><strong>Growing Sellers</strong><br>(50-500 products)</td>
+                <td>Too many products to track manually; hidden losses</td>
+                <td>Automated tracking across entire portfolio; smart alerts</td>
+            </tr>
+            <tr>
+                <td><strong>Power Sellers</strong><br>(500+ products)</td>
+                <td>Complex operations; need team access; advanced analytics</td>
+                <td>Enterprise-grade analytics; multi-user accounts; API access</td>
+            </tr>
+        </table>
+        
+        <h3>How It's Different from Current Solutions</h3>
+        
+        <table>
+            <tr>
+                <th>Feature</th>
+                <th>Current Method<br>(CSV + Excel)</th>
+                <th>Competitor Tools<br>(Stockburst, etc.)</th>
+                <th>Our Dashboard</th>
+            </tr>
+            <tr>
+                <td>Data Freshness</td>
+                <td>Weekly manual export</td>
+                <td>Daily sync</td>
+                <td style="background: #d4edda;"><strong>Real-time (webhooks)</strong></td>
+            </tr>
+            <tr>
+                <td>Setup Time</td>
+                <td>2-3 hours building formulas</td>
+                <td>30-60 min CSV import</td>
+                <td style="background: #d4edda;"><strong>2 minutes OAuth</strong></td>
+            </tr>
+            <tr>
+                <td>Loss Prevention</td>
+                <td>Discover after restocking</td>
+                <td>Historical reports only</td>
+                <td style="background: #d4edda;"><strong>Proactive alerts</strong></td>
+            </tr>
+            <tr>
+                <td>Price Optimization</td>
+                <td>Manual guesswork</td>
+                <td>Basic fee calculator</td>
+                <td style="background: #d4edda;"><strong>AI-powered recommendations</strong></td>
+            </tr>
+            <tr>
+                <td>Accuracy</td>
+                <td>Prone to formula errors</td>
+                <td>Depends on CSV quality</td>
+                <td style="background: #d4edda;"><strong>Direct API = 100% accurate</strong></td>
+            </tr>
+            <tr>
+                <td>Focus</td>
+                <td>Inventory management</td>
+                <td>Inventory management</td>
+                <td style="background: #d4edda;"><strong>Profitability optimization</strong></td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- TECHNICAL ARCHITECTURE -->
+    <div class="section">
+        <h1>2. Technical Architecture</h1>
+        
+        <h2>System Architecture Overview</h2>
+        
+        <div class="ui-mockup">
+            <h3>High-Level Architecture Diagram</h3>
+            <div class="flowchart">
+                <div class="flow-box">
+                    <strong>Takealot</strong><br>
+                    Seller API<br>
+                    + Webhooks
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-box">
+                    <strong>Our Backend</strong><br>
+                    API Gateway<br>
+                    Auth Layer
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-box">
+                    <strong>Processing</strong><br>
+                    Profit Calculator<br>
+                    Alert Engine
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-box">
+                    <strong>Database</strong><br>
+                    PostgreSQL<br>
+                    Redis Cache
+                </div>
+                <div class="flow-arrow">→</div>
+                <div class="flow-box">
+                    <strong>Frontend</strong><br>
+                    React Dashboard<br>
+                    Real-time UI
+                </div>
+            </div>
+        </div>
+        
+        <h2>Data Flow Architecture</h2>
+        
+        <h3>1. Initial Sync Flow (First-Time User)</h3>
+        
+        <div class="code-block">
+// Pseudo-code for initial data sync
+async function initialDataSync(sellerId, apiToken) {
+  
+  // Step 1: Authenticate with Takealot
+  const auth = await takealotAPI.authenticate(apiToken);
+  
+  // Step 2: Fetch historical data (90 days)
+  const [products, orders, fees, stock] = await Promise.all([
+    takealotAPI.getProducts(auth),
+    takealotAPI.getOrders(auth, { days: 90 }),
+    takealotAPI.getFinancialTransactions(auth, { days: 90 }),
+    takealotAPI.getStockLevels(auth)
+  ]);
+  
+  // Step 3: Match fees to orders (complex logic)
+  const enrichedOrders = matchFeesToOrders(orders, fees);
+  
+  // Step 4: Calculate profitability (estimate without COGS)
+  const profitability = calculateEstimatedProfit(enrichedOrders, products);
+  
+  // Step 5: Identify loss-making products
+  const alerts = generateInitialAlerts(profitability);
+  
+  // Step 6: Store in database
+  await db.transaction(async (trx) => {
+    await trx.insert('products', products);
+    await trx.insert('orders', enrichedOrders);
+    await trx.insert('profitability_snapshots', profitability);
+    await trx.insert('alerts', alerts);
+  });
+  
+  // Step 7: Trigger onboarding flow
+  return { profitability, alerts, nextStep: 'ADD_COGS' };
+}</div>
+        
+        <h3>2. Real-Time Update Flow (Webhooks)</h3>
+        
+        <div class="code-block">
+// Webhook handler for new orders
+app.post('/webhooks/takealot/order-created', async (req, res) => {
+  
+  const { order_id, tsin, selling_price, quantity } = req.body;
+  
+  // Step 1: Fetch product details
+  const product = await db.getProduct(tsin);
+  
+  // Step 2: Calculate fees in real-time
+  const fees = calculateFees({
+    sellingPrice: selling_price,
+    category: product.category,
+    weight: product.weight,
+    dimensions: product.dimensions,
+    shippedFrom: order.dc_location
+  });
+  
+  // Step 3: Calculate profit
+  const profit = selling_price - fees.total - product.landed_cost - product.allocated_costs;
+  const margin = (profit / selling_price) * 100;
+  
+  // Step 4: Store order with profitability
+  await db.createOrder({
+    order_id,
+    product_id: product.id,
+    selling_price,
+    fees,
+    profit,
+    margin
+  });
+  
+  // Step 5: Check if alert needed
+  if (margin < product.target_margin || profit < 0) {
+    await alertService.send({
+      type: 'LOW_MARGIN_SALE',
+      product: product.name,
+      profit,
+      margin,
+      recommendation: generateRecommendation(product, profit)
+    });
+  }
+  
+  // Step 6: Update real-time dashboard (WebSocket)
+  io.to(product.seller_id).emit('new_sale', {
+    product: product.name,
+    profit,
+    margin
+  });
+  
+  res.status(200).json({ received: true });
+});</div>
+        
+        <h2>Technology Stack Recommendation</h2>
+        
+        <table>
+            <tr>
+                <th>Layer</th>
+                <th>Technology</th>
+                <th>Justification</th>
+            </tr>
+            <tr>
+                <td><strong>Frontend</strong></td>
+                <td>React + TypeScript<br>TailwindCSS<br>Recharts/Chart.js<br>React Query</td>
+                <td>• Modern, fast, component-based<br>• Type safety reduces bugs<br>• Rapid UI development<br>• Excellent charting libraries<br>• Efficient API state management</td>
+            </tr>
+            <tr>
+                <td><strong>Backend API</strong></td>
+                <td>Node.js + Express<br>OR<br>Python + FastAPI</td>
+                <td>• Node: Same language as frontend, excellent async<br>• Python: Better for ML/analytics if adding AI features</td>
+            </tr>
+            <tr>
+                <td><strong>Database</strong></td>
+                <td>PostgreSQL<br>(Primary)<br><br>Redis<br>(Cache)</td>
+                <td>• PostgreSQL: Relational data, ACID compliance, JSON support<br>• Redis: Fast caching for API responses, session management</td>
+            </tr>
+            <tr>
+                <td><strong>Background Jobs</strong></td>
+                <td>Bull Queue<br>(Node.js)<br>OR<br>Celery<br>(Python)</td>
+                <td>• Async processing for API syncs<br>• Scheduled jobs (daily fee calculations)<br>• Retry logic for failed API calls</td>
+            </tr>
+            <tr>
+                <td><strong>Real-time</strong></td>
+                <td>Socket.io<br>OR<br>WebSockets</td>
+                <td>• Push updates to dashboard instantly<br>• Live profit notifications</td>
+            </tr>
+            <tr>
+                <td><strong>Hosting</strong></td>
+                <td>Frontend: Vercel<br>Backend: Railway/Render<br>DB: AWS RDS/Supabase</td>
+                <td>• Vercel: Best for React, edge caching<br>• Railway: Easy deployment, auto-scaling<br>• RDS: Managed PostgreSQL</td>
+            </tr>
+            <tr>
+                <td><strong>Monitoring</strong></td>
+                <td>Sentry (errors)<br>LogRocket (user sessions)<br>Mixpanel (analytics)</td>
+                <td>• Catch bugs in production<br>• Understand user behavior<br>• Track feature usage</td>
+            </tr>
+        </table>
+        
+        <h2>Database Schema Design</h2>
+        
+        <div class="code-block">
+-- Core Tables
+
+CREATE TABLE sellers (
+  id UUID PRIMARY KEY,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  takealot_api_token TEXT ENCRYPTED,
+  takealot_refresh_token TEXT ENCRYPTED,
+  vat_registered BOOLEAN DEFAULT false,
+  target_margin_pct DECIMAL(5,2) DEFAULT 25.00,
+  subscription_tier VARCHAR(50) DEFAULT 'free',
+  created_at TIMESTAMP DEFAULT NOW(),
+  last_sync TIMESTAMP
+);
+
+CREATE TABLE products (
+  id UUID PRIMARY KEY,
+  seller_id UUID REFERENCES sellers(id),
+  tsin VARCHAR(100) NOT NULL,
+  name VARCHAR(500),
+  category VARCHAR(100),
+  weight_kg DECIMAL(8,3),
+  dimensions_cm3 INTEGER,
+  landed_cost_cents INTEGER, -- Store in cents to avoid float issues
+  barcode_exists BOOLEAN DEFAULT true,
+  current_price_cents INTEGER,
+  competitor_price_cents INTEGER, -- For Buy Box analysis
+  last_updated TIMESTAMP DEFAULT NOW(),
+  UNIQUE(seller_id, tsin)
+);
+
+CREATE TABLE orders (
+  id UUID PRIMARY KEY,
+  seller_id UUID REFERENCES sellers(id),
+  product_id UUID REFERENCES products(id),
+  takealot_order_id VARCHAR(100) UNIQUE,
+  order_date TIMESTAMP NOT NULL,
+  quantity INTEGER NOT NULL,
+  selling_price_incl_vat_cents INTEGER NOT NULL,
+  shipped_from_dc VARCHAR(10), -- 'JHB' or 'CPT'
+  shipped_to_customer_location VARCHAR(10),
+  status VARCHAR(50), -- 'confirmed', 'shipped', 'delivered', 'returned'
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE fees (
+  id UUID PRIMARY KEY,
+  order_id UUID REFERENCES orders(id),
+  fee_type VARCHAR(50), -- 'success', 'fulfilment', 'storage', 'ibt', 'cancellation', 'subscription'
+  amount_cents INTEGER NOT NULL,
+  calculation_date TIMESTAMP DEFAULT NOW(),
+  details JSONB -- Store breakdown for complex fees
+);
+
+CREATE TABLE profitability_snapshots (
+  id UUID PRIMARY KEY,
+  seller_id UUID REFERENCES sellers(id),
+  product_id UUID REFERENCES products(id),
+  period_start DATE NOT NULL,
+  period_end DATE NOT NULL,
+  units_sold INTEGER DEFAULT 0,
+  total_revenue_cents INTEGER DEFAULT 0,
+  total_fees_cents INTEGER DEFAULT 0,
+  total_cogs_cents INTEGER DEFAULT 0,
+  allocated_costs_cents INTEGER DEFAULT 0, -- Inbound shipping, ads, etc.
+  net_profit_cents INTEGER DEFAULT 0,
+  margin_pct DECIMAL(5,2) DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(seller_id, product_id, period_start, period_end)
+);
+
+CREATE TABLE alerts (
+  id UUID PRIMARY KEY,
+  seller_id UUID REFERENCES sellers(id),
+  product_id UUID REFERENCES products(id),
+  alert_type VARCHAR(50), -- 'LOSS_MAKING', 'LOW_MARGIN', 'STORAGE_WARNING', 'IBT_PENALTY', etc.
+  severity VARCHAR(20), -- 'info', 'warning', 'critical'
+  message TEXT,
+  recommendation TEXT,
+  dismissed BOOLEAN DEFAULT false,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE stock_levels (
+  id UUID PRIMARY KEY,
+  seller_id UUID REFERENCES sellers(id),
+  product_id UUID REFERENCES products(id),
+  dc_location VARCHAR(10), -- 'JHB' or 'CPT'
+  units_on_hand INTEGER DEFAULT 0,
+  days_cover INTEGER DEFAULT 0,
+  last_updated TIMESTAMP DEFAULT NOW(),
+  UNIQUE(seller_id, product_id, dc_location)
+);
+
+-- Indexes for performance
+CREATE INDEX idx_orders_seller_date ON orders(seller_id, order_date DESC);
+CREATE INDEX idx_products_seller ON products(seller_id);
+CREATE INDEX idx_alerts_seller_dismissed ON alerts(seller_id, dismissed);
+CREATE INDEX idx_profitability_seller_period ON profitability_snapshots(seller_id, period_start, period_end);</div>
+    </div>
+
+    <!-- API INTEGRATION STRATEGY -->
+    <div class="section">
+        <h1>3. API Integration Strategy</h1>
+        
+        <h2>Takealot Seller API - Available Endpoints</h2>
+        
+        <p>Based on the official Takealot Seller API documentation (<a href="https://seller-api.takealot.com/api-docs/">https://seller-api.takealot.com/api-docs/</a>), here's what we can reliably access:</p>
+        
+        <table>
+            <tr>
+                <th>Endpoint Category</th>
+                <th>What We Get</th>
+                <th>Update Frequency</th>
+                <th>Use in Dashboard</th>
+            </tr>
+            <tr>
+                <td><strong>✅ Orders</strong><br><code>/orders</code></td>
+                <td>• Order ID<br>• Product TSIN<br>• Selling price<br>• Quantity<br>• Order date<br>• Status<br>• Customer location</td>
+                <td>Real-time via webhook<br>+ API polling backup</td>
+                <td><strong>Core profitability calculation</strong></td>
+            </tr>
+            <tr>
+                <td><strong>✅ Products/Offers</strong><br><code>/offers</code></td>
+                <td>• Product catalog<br>• TSIN<br>• Current price<br>• Category<br>• Dimensions<br>• Weight</td>
+                <td>Every 6 hours<br>(product data rarely changes)</td>
+                <td>Fee calculation inputs</td>
+            </tr>
+            <tr>
+                <td><strong>✅ Stock Levels</strong><br><code>/stock</code></td>
+                <td>• Units on hand per DC<br>• Location (JHB/CPT)<br>• Lead time vs in-stock</td>
+                <td>Every 1 hour<br>(for storage fee prediction)</td>
+                <td>Storage fee forecasting<br>IBT penalty prevention</td>
+            </tr>
+            <tr>
+                <td><strong>⚠️ Financial Transactions</strong><br><code>/financial/transactions</code></td>
+                <td>• All fees charged<br>• Settlement amounts<br>• Deductions</td>
+                <td>Daily<br>(fees settle overnight)</td>
+                <td>Actual fees vs calculated<br>Reconciliation</td>
+            </tr>
+            <tr>
+                <td><strong>⚠️ Returns</strong><br><code>/returns</code></td>
+                <td>• Return requests<br>• Reason codes<br>• Refund amounts</td>
+                <td>Real-time via webhook</td>
+                <td>Adjust profitability<br>Product quality alerts</td>
+            </tr>
+            <tr>
+                <td><strong>✅ Settlements/Payouts</strong><br><code>/settlements</code></td>
+                <td>• Payout amounts<br>• Payout dates<br>• Transaction breakdown</td>
+                <td>Weekly<br>(Takealot pays weekly)</td>
+                <td>Cash flow forecasting</td>
+            </tr>
+        </table>
+        
+        <div class="warning-box">
+            <h3>⚠️ API Limitations Discovered</h3>
+            <p><strong>Fees are often aggregated, not per-order.</strong> The <code>/financial/transactions</code> endpoint may return a daily summary like "Success Fees: R450" rather than "Order #12345: R15 success fee, Order #12346: R18 success fee."</p>
+            <p><strong>Workaround:</strong> We'll calculate expected fees ourselves using the Takealot pricing schedule, then reconcile with actual fees daily to catch discrepancies.</p>
+        </div>
+        
+        <h2>Data We CANNOT Get from API (Workarounds)</h2>
+        
+        <table>
+            <tr>
+                <th>Data Type</th>
+                <th>Why It's Missing</th>
+                <th>Workaround Strategy</th>
+                <th>Accuracy Level</th>
+            </tr>
+            <tr>
+                <td><strong>❌ COGS</strong><br>(Cost of Goods Sold)</td>
+                <td>Seller's private business data, not in Takealot system</td>
+                <td><strong>Phase 1:</strong> Manual input during onboarding<br><strong>Phase 2:</strong> CSV import from supplier invoices<br><strong>Phase 3:</strong> Integration with accounting software (Xero, Sage)</td>
+                <td>100% accurate<br>(seller-provided)</td>
+            </tr>
+            <tr>
+                <td><strong>❌ Competitor Prices</strong></td>
+                <td>Not exposed via API (competitive data)</td>
+                <td><strong>Web Scraping:</strong><br>1. Daily scrape of product pages<br>2. Extract "Buy Box" winner price<br>3. Extract other seller prices<br>4. Use headless browser (Puppeteer) to avoid blocking<br><strong>Alternative:</strong> Manual input from seller</td>
+                <td>90% accurate<br>(scraping reliable for now)</td>
+            </tr>
+            <tr>
+                <td><strong>❌ Buy Box Status</strong><br>(Who won the Buy Box)</td>
+                <td>Not in API</td>
+                <td><strong>Inference Method:</strong><br>• If our seller's sales velocity suddenly increases = likely won Buy Box<br>• Cross-reference with price drops<br><strong>Scraping Method:</strong><br>• Check product page, see if our seller is primary<br><strong>Manual Input:</strong> Seller confirms</td>
+                <td>70% accurate<br>(inference)<br><br>95% accurate<br>(scraping)</td>
+            </tr>
+            <tr>
+                <td><strong>⚠️ Exact IBT Fees</strong><br>(Inter-branch transfers)</td>
+                <td>May be aggregated in API</td>
+                <td><strong>Calculate Ourselves:</strong><br>• If order placed in CPT but shipped from JHB = IBT occurred<br>• Apply fee schedule based on product size/weight<br>• Reconcile with actual fees monthly</td>
+                <td>95% accurate<br>(our calculation matches Takealot's)</td>
+            </tr>
+            <tr>
+                <td><strong>❌ Advertising Spend</strong><br>(Takealot Sponsored Ads)</td>
+                <td>Separate Takealot Ads platform, not in Seller API</td>
+                <td><strong>Manual Input:</strong><br>• Ask seller for monthly ad budget<br>• Allocate proportionally across products based on sales<br><strong>Future:</strong> Potential API integration with Takealot Ads (if they release it)</td>
+                <td>80% accurate<br>(estimated allocation)</td>
+            </tr>
+            <tr>
+                <td><strong>❌ Inbound Shipping Costs</strong></td>
+                <td>Seller's private courier costs</td>
+                <td><strong>Manual Input:</strong><br>• Ask total cost to ship to DC<br>• Divide by units in shipment<br>• Allocate per-unit cost<br><strong>Smart Estimation:</strong> Use average courier rates (R150-R300 per 10kg shipment)</td>
+                <td>100% accurate<br>(seller-provided)</td>
+            </tr>
+        </table>
+        
+        <h2>Competitor Price Scraping - Technical Plan</h2>
+        
+        <div class="highlight-box">
+            <h3>Web Scraping Implementation</h3>
+            <div class="code-block">
+// Puppeteer scraper for Takealot product pages
+const puppeteer = require('puppeteer');
+
+async function scrapeCompetitorPrices(tsin, productUrl) {
+  const browser = await puppeteer.launch({ headless: true });
+  const page = await browser.newPage();
+  
+  // Set realistic headers to avoid detection
+  await page.setUserAgent('Mozilla/5.0 ...');
+  await page.goto(productUrl, { waitUntil: 'networkidle2' });
+  
+  // Extract Buy Box winner
+  const buyBoxPrice = await page.$eval(
+    '.buying-options .price',
+    el => parseFloat(el.textContent.replace(/[^0-9.]/g, ''))
+  );
+  
+  // Extract all seller prices (if "See all sellers" is clicked)
+  await page.click('.all-sellers-link'); // If exists
+  const allSellerPrices = await page.$$eval(
+    '.seller-card .price',
+    elements => elements.map(el => ({
+      price: parseFloat(el.textContent.replace(/[^0-9.]/g, '')),
+      seller: el.closest('.seller-card').querySelector('.seller-name').textContent
+    }))
+  );
+  
+  await browser.close();
+  
+  return {
+    buyBoxPrice,
+    lowestCompetitorPrice: Math.min(...allSellerPrices.map(s => s.price)),
+    averagePrice: allSellerPrices.reduce((a, b) => a + b.price, 0) / allSellerPrices.length,
+    totalCompetitors: allSellerPrices.length,
+    ourRanking: allSellerPrices.findIndex(s => s.seller === 'Our Seller') + 1
+  };
+}
+
+// Run daily for all active products
+async function dailyCompetitorScan(sellerId) {
+  const products = await db.getActiveProducts(sellerId);
+  
+  for (const product of products) {
+    try {
+      const competitorData = await scrapeCompetitorPrices(
+        product.tsin,
+        `https://www.takealot.com/product/${product.tsin}`
+      );
+      
+      await db.updateProduct(product.id, {
+        competitor_lowest_price: competitorData.lowestCompetitorPrice,
+        buy_box_price: competitorData.buyBoxPrice,
+        competitor_count: competitorData.totalCompetitors,
+        last_competitor_check: new Date()
+      });
+      
+      // Alert if undercut
+      if (product.current_price > competitorData.buyBoxPrice + 5) {
+        await createAlert({
+          type: 'UNDERCUT_BY_COMPETITOR',
+          message: `You've been undercut on "${product.name}". Buy Box is now R${competitorData.buyBoxPrice} vs your R${product.current_price}`,
+          recommendation: `Lower to R${competitorData.buyBoxPrice - 1} to win Buy Box`
+        });
+      }
+      
+    } catch (error) {
+      console.error(`Scraping failed for ${product.tsin}:`, error);
+      // Fallback: Use API data only, mark as estimate
+    }
+    
+    // Rate limiting: Wait 2-5 seconds between requests
+    await sleep(Math.random() * 3000 + 2000);
+  }
+}</div>
+            
+            <p><strong>Scraping Best Practices:</strong></p>
+            <ul>
+                <li>Rotate user agents to mimic real browsers</li>
+                <li>Add random delays between requests (2-5 seconds)</li>
+                <li>Use residential proxies if Takealot starts blocking (unlikely for occasional scraping)</li>
+                <li>Cache results for 24 hours (competitor prices don't change hourly)</li>
+                <li>Have fallback: if scraping fails, seller can manually input competitor price</li>
+            </ul>
+        </div>
+        
+        <h2>Webhook Implementation</h2>
+        
+        <p>Takealot supports webhooks for real-time events. We'll subscribe to:</p>
+        
+        <table>
+            <tr>
+                <th>Webhook Event</th>
+                <th>Trigger</th>
+                <th>Our Action</th>
+            </tr>
+            <tr>
+                <td><code>order.created</code></td>
+                <td>New order placed</td>
+                <td>• Calculate profit instantly<br>• Update dashboard in real-time<br>• Send notification if margin < target</td>
+            </tr>
+            <tr>
+                <td><code>order.cancelled</code></td>
+                <td>Order cancelled by customer or Takealot</td>
+                <td>• Reverse profitability calculation<br>• If late cancellation, apply R50 penalty to P&L<br>• Alert seller to investigate</td>
+            </tr>
+            <tr>
+                <td><code>return.initiated</code></td>
+                <td>Customer requests return</td>
+                <td>• Adjust profit (assume refund will happen)<br>• Track return rate per product<br>• Alert if >10% return rate</td>
+            </tr>
+            <tr>
+                <td><code>stock.low</code></td>
+                <td>Stock falls below threshold</td>
+                <td>• Warn if approaching storage fee threshold (35 days)<br>• Suggest optimal restock quantity</td>
+            </tr>
+        </table>
+        
+        <div class="highlight-box">
+            <h3>Webhook Security</h3>
+            <p>Takealot signs webhook payloads with HMAC-SHA256. We verify every incoming webhook:</p>
+            <div class="code-block">
+const crypto = require('crypto');
+
+function verifyWebhook(req, webhookSecret) {
+  const signature = req.headers['x-takealot-signature'];
+  const payload = JSON.stringify(req.body);
+  
+  const expectedSignature = crypto
+    .createHmac('sha256', webhookSecret)
+    .update(payload)
+    .digest('hex');
+  
+  if (signature !== expectedSignature) {
+    throw new Error('Invalid webhook signature');
+  }
+  
+  return true;
+}</div>
+        </div>
+    </div>
+
+    <!-- FEATURE SPECIFICATIONS -->
+    <div class="section">
+        <h1>4. Feature Specifications & UI Mockups</h1>
+        
+        <h2>Core Dashboard Features</h2>
+        
+        <h3>Feature 1: Live Profitability Scorecard</h3>
+        
+        <div class="ui-mockup">
+            <div class="dashboard-header">
+                <h3 style="margin:0;">📊 Real-Time Profitability Dashboard</h3>
+                <p style="margin:5pt 0 0 0; opacity: 0.9; font-size: 10pt;">Last updated: 3 minutes ago</p>
+            </div>
+            
+            <div class="stat-grid" style="background: white; padding: 15pt;">
+                <div class="stat-item">
+                    <div class="value" style="color: #28a745;">R 1,247.50</div>
+                    <div class="label">Today's Profit ↑ 12%</div>
+                </div>
+                <div class="stat-item">
+                    <div class="value">R 18,923</div>
+                    <div class="label">This Month</div>
+                </div>
+                <div class="stat-item">
+                    <div class="value">28.5%</div>
+                    <div class="label">Avg Margin (Target: 30%)</div>
+                </div>
+                <div class="stat-item">
+                    <div class="value">47</div>
+                    <div class="label">Orders Today</div>
+                </div>
+                <div class="stat-item">
+                    <div class="value">R 26.54</div>
+                    <div class="label">Avg Profit/Order</div>
+                </div>
+                <div class="stat-item">
+                    <div class="value">R 8,450</div>
+                    <div class="label">Next Payout (in 5 days)</div>
+                </div>
+            </div>
+        </div>
+        
+        <p><strong>Why It's Irresistible:</strong> Immediate gratification. Sellers see their ACTUAL profit, not just revenue. Updates in real-time via WebSocket.</p>
+        
+        <h3>Feature 2: Product Performance Table</h3>
+        
+        <div class="ui-mockup">
+            <h4>Your Products - Sorted by Profitability</h4>
+            <div style="margin: 10pt 0; font-size: 9pt; color: #666;">
+                Filters: <select style="padding: 4pt; margin: 0 5pt;"><option>All Categories</option><option>Electronic Accessories</option></select>
+                <select style="padding: 4pt; margin: 0 5pt;"><option>All Status</option><option>Profitable Only</option><option>Loss-Making Only</option></select>
+                <input type="text" placeholder="Search products..." style="padding: 4pt; margin: 0 5pt;">
+            </div>
+            
+            <div class="product-row header">
+                <div>Product Name</div>
+                <div>Units Sold (30d)</div>
+                <div>Revenue</div>
+                <div>Total Fees</div>
+                <div>Net Profit</div>
+                <div>Margin % / Status</div>
+            </div>
+            
+            <div class="product-row" style="background: #e8f5e9;">
+                <div><strong>USB-C Charger 65W</strong><br><span style="font-size: 8pt; color: #666;">TSIN: 12345</span></div>
+                <div>42</div>
+                <div>R 8,358</div>
+                <div>R 1,254</div>
+                <div style="color: #28a745; font-weight: bold;">R 2,904</div>
+                <div>
+                    <strong>34.7%</strong><br>
+                    <span class="status-badge status-good">✓ Excellent</span>
+                </div>
+            </div>
+            
+            <div class="product-row" style="background: white;">
+                <div><strong>HDMI Cable 2m</strong><br><span style="font-size: 8pt; color: #666;">TSIN: 12346</span></div>
+                <div>89</div>
+                <div>R 6,231</div>
+                <div>R 1,870</div>
+                <div style="color: #28a745; font-weight: bold;">R 1,691</div>
+                <div>
+                    <strong>27.1%</strong><br>
+                    <span class="status-badge status-good">✓ Good</span>
+                </div>
+            </div>
+            
+            <div class="product-row" style="background: #fff3cd;">
+                <div><strong>Bluetooth Speaker Mini</strong><br><span style="font-size: 8pt; color: #666;">TSIN: 12347</span></div>
+                <div>15</div>
+                <div>R 4,485</div>
+                <div>R 897</div>
+                <div style="color: #ff9800; font-weight: bold;">R 588</div>
+                <div>
+                    <strong>13.1%</strong><br>
+                    <span class="status-badge status-warning">⚠ Low Margin</span>
+                </div>
+            </div>
+            
+            <div class="product-row" style="background: #ffebee;">
+                <div><strong>Wireless Mouse X200</strong><br><span style="font-size: 8pt; color: #666;">TSIN: 12348</span></div>
+                <div>8</div>
+                <div>R 1,192</div>
+                <div>R 239</div>
+                <div style="color: #dc3545; font-weight: bold;">-R 247</div>
+                <div>
+                    <strong>-20.7%</strong><br>
+                    <span class="status-badge status-danger">✗ LOSS</span>
+                </div>
+            </div>
+            
+            <div style="margin-top: 10pt; padding: 10pt; background: #f8f9fa; border-radius: 4px; font-size: 9pt;">
+                💡 <strong>Quick Actions:</strong> Click any row to see detailed fee breakdown and optimization suggestions
+            </div>
+        </div>
+        
+        <p><strong>Interactive Features:</strong></p>
+        <ul>
+            <li>Click row → Drill down to individual order history</li>
+            <li>Sort by any column (default: highest loss first to catch problems)</li>
+            <li>Color-coded rows: Green (>25%), Yellow (15-25%), Red (<15% or negative)</li>
+            <li>Export to CSV for offline analysis</li>
+        </ul>
+        
+        <h3>Feature 3: Fee Breakdown Visualizer (Waterfall Chart)</h3>
+        
+        <div class="ui-mockup">
+            <h4>Profit Breakdown: USB-C Charger 65W</h4>
+            <p style="font-size: 9pt; color: #666; margin-bottom: 15pt;">Average per sale over last 30 days</p>
+            
+            <div class="waterfall-chart">
+                <div class="waterfall-bar">
+                    <div class="waterfall-label">Selling Price</div>
+                    <div class="waterfall-visual" style="width: 100%; background: #667eea;">R 199.00</div>
+                </div>
+                
+                <div class="waterfall-bar">
+                    <div class="waterfall-label">- Success Fee (12%)</div>
+                    <div class="waterfall-visual negative" style="width: 12%;">-R 23.88</div>
+                </div>
+                
+                <div class="waterfall-bar">
+                    <div class="waterfall-label">- Fulfilment Fee</div>
+                    <div class="waterfall-visual negative" style="width: 21%;">-R 42.00</div>
+                </div>
+                
+                <div class="waterfall-bar">
+                    <div class="waterfall-label">- COGS (Cost)</div>
+                    <div class="waterfall-visual negative" style="width: 38%;">-R 75.00</div>
+                </div>
+                
+                <div class="waterfall-bar">
+                    <div class="waterfall-label">- Inbound Shipping</div>
+                    <div class="waterfall-visual negative" style="width: 2%;">-R 3.20</div>
+                </div>
+                
+                <div class="waterfall-bar">
+                    <div class="waterfall-label">- Storage Fee</div>
+                    <div class="waterfall-visual negative" style="width: 0%;">R 0.00</div>
+                </div>
+                
+                <div class="waterfall-bar">
+                    <div class="waterfall-label">- Ad Spend (allocated)</div>
+                    <div class="waterfall-visual negative" style="width: 3%;">-R 4.50</div>
+                </div>
+                
+                <div class="waterfall-bar" style="margin-top: 10pt; padding-top: 10pt; border-top: 2px solid #333;">
+                    <div class="waterfall-label"><strong>= Net Profit</strong></div>
+                    <div class="waterfall-visual positive" style="width: 25%; background: #28a745;"><strong>R 50.42 (25.3%)</strong></div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 15pt; padding: 10pt; background: #e8f5e9; border-radius: 4px; font-size: 9pt;">
+                ✅ <strong>Healthy margin!</strong> You're making R50.42 profit on every sale. Your target is 25% - you're on track.
+            </div>
+        </div>
+        
+        <p><strong>Why It's Irresistible:</strong> Transparency. Sellers finally SEE where every rand goes. No more mystery fees.</p>
+        
+        <h3>Feature 4: Smart Alerts & Recommendations</h3>
+        
+        <div class="ui-mockup">
+            <h4>🚨 Your Alerts (3 New)</h4>
+            
+            <div style="border-left: 4px solid #dc3545; padding: 12pt; margin: 10pt 0; background: #fff5f5; border-radius: 4px;">
+                <div style="font-weight: bold; color: #dc3545; margin-bottom: 5pt;">⚠️ PROFIT ALERT: Product Losing Money</div>
+                <div style="font-size: 10pt; margin-bottom: 8pt;">
+                    <strong>"Wireless Mouse X200"</strong> is losing <strong>R30.88 per sale</strong>. You've sold 8 units this month = R247 total loss.
+                </div>
+                <div style="font-size: 9pt; padding: 8pt; background: white; border-radius: 4px; margin-bottom: 8pt;">
+                    <strong>💡 Recommendations:</strong><br>
+                    • Increase price to R165 (+R16) to break even<br>
+                    • OR switch to lead-time delivery to avoid R47 fulfilment fee<br>
+                    • OR discontinue this product (low sales + loss = not worth it)
+                </div>
+                <button style="background: #dc3545; color: white; border: none; padding: 8pt 15pt; border-radius: 4px; font-weight: bold; cursor: pointer;">Fix This Now</button>
+                <button style="background: white; border: 1px solid #ddd; padding: 8pt 15pt; border-radius: 4px; margin-left: 5pt; cursor: pointer;">Dismiss</button>
+            </div>
+            
+            <div style="border-left: 4px solid #ff9800; padding: 12pt; margin: 10pt 0; background: #fffbf0; border-radius: 4px;">
+                <div style="font-weight: bold; color: #ff9800; margin-bottom: 5pt;">🎯 OPPORTUNITY: Increase Price</div>
+                <div style="font-size: 10pt; margin-bottom: 8pt;">
+                    You're <strong>R3.50 below the Buy Box</strong> on "USB-C Charger 65W". You can raise your price and still win!
+                </div>
+                <div style="font-size: 9pt; padding: 8pt; background: white; border-radius: 4px; margin-bottom: 8pt;">
+                    <strong>💰 Impact:</strong> Raising to R202.50 would give you an extra <strong>+R147/month</strong> in profit (based on 42 sales/month)
+                </div>
+                <button style="background: #ff9800; color: white; border: none; padding: 8pt 15pt; border-radius: 4px; font-weight: bold; cursor: pointer;">Increase Price</button>
+            </div>
+            
+            <div style="border-left: 4px solid #2196f3; padding: 12pt; margin: 10pt 0; background: #f0f8ff; border-radius: 4px;">
+                <div style="font-weight: bold; color: #2196f3; margin-bottom: 5pt;">📦 STOCK WARNING: Storage Fees Coming</div>
+                <div style="font-size: 10pt; margin-bottom: 8pt;">
+                    "Bluetooth Speaker Mini" is at <strong>38 days stock cover</strong>. You'll incur R6/unit storage fees in 3 days.
+                </div>
+                <div style="font-size: 9pt; padding: 8pt; background: white; border-radius: 4px; margin-bottom: 8pt;">
+                    <strong>💡 Suggestions:</strong><br>
+                    • Run a 10% discount promotion to move stock faster<br>
+                    • Reduce your next replenishment order by 30%<br>
+                    • Current stock: 15 units × R6 = R90/month in fees if not sold
+                </div>
+                <button style="background: #2196f3; color: white; border: none; padding: 8pt 15pt; border-radius: 4px; font-weight: bold; cursor: pointer;">Create Promotion</button>
+            </div>
+        </div>
+        
+        <p><strong>Why It's Irresistible:</strong> Actionable intelligence. Not just "here's data" but "here's exactly what to do next."</p>
+        
+        <h3>Feature 5: Price Optimizer Tool</h3>
+        
+        <div class="ui-mockup">
+            <h4>💰 Price Optimizer: USB-C Charger 65W</h4>
+            
+            <div style="background: white; padding: 15pt;">
+                <div style="margin-bottom: 15pt;">
+                    <label style="display: block; font-weight: bold; margin-bottom: 5pt;">Adjust Selling Price:</label>
+                    <input type="range" min="150" max="250" value="199" style="width: 100%;">
+                    <div style="display: flex; justify-content: space-between; font-size: 9pt; color: #666;">
+                        <span>R150</span>
+                        <span style="font-weight: bold; font-size: 14pt; color: #667eea;">R199</span>
+                        <span>R250</span>
+                    </div>
+                </div>
+                
+                <table style="margin-top: 15pt;">
+                    <tr>
+                        <th>Scenario</th>
+                        <th>Price</th>
+                        <th>Profit/Sale</th>
+                        <th>Margin</th>
+                        <th>Buy Box Chance</th>
+                    </tr>
+                    <tr style="background: #fffbf0;">
+                        <td><strong>Aggressive</strong></td>
+                        <td>R 189</td>
+                        <td>R 40.42</td>
+                        <td>21.4%</td>
+                        <td style="color: #28a745; font-weight: bold;">95% ⭐</td>
+                    </tr>
+                    <tr style="background: #e8f5e9;">
+                        <td><strong>Current</strong></td>
+                        <td>R 199</td>
+                        <td>R 50.42</td>
+                        <td>25.3%</td>
+                        <td style="color: #28a745; font-weight: bold;">80% ✓</td>
+                    </tr>
+                    <tr style="background: #f0f8ff;">
+                        <td><strong>Optimized</strong></td>
+                        <td>R 209</td>
+                        <td>R 59.22</td>
+                        <td>28.3%</td>
+                        <td style="color: #ff9800; font-weight: bold;">55% ⚠️</td>
+                    </tr>
+                    <tr style="background: white;">
+                        <td><strong>Premium</strong></td>
+                        <td>R 229</td>
+                        <td>R 77.02</td>
+                        <td>33.6%</td>
+                        <td style="color: #dc3545; font-weight: bold;">20% ✗</td>
+                    </tr>
+                </table>
+                
+                <div style="margin-top: 15pt; padding: 12pt; background: #f0f4ff; border-radius: 6px;">
+                    <strong>🎯 Recommendation:</strong> Increase to <strong>R209</strong> for optimal profit. You'll still likely win the Buy Box (55% chance) and earn an extra <strong>R8.80 per sale</strong> = <strong>+R370/month</strong> based on current sales velocity.
+                </div>
+                
+                <button style="background: #667eea; color: white; border: none; padding: 12pt 25pt; border-radius: 6px; font-weight: bold; font-size: 11pt; cursor: pointer; margin-top: 15pt;">Update Price to R209</button>
+            </div>
+        </div>
+        
+        <p><strong>Why It's Irresistible:</strong> Empowerment. Sellers can experiment with "what if" scenarios and see immediate profit impact.</p>
+        
+        <h3>Feature 6: Cash Flow Forecaster</h3>
+        
+        <div class="ui-mockup">
+            <h4>📅 Next 30 Days Cash Flow Projection</h4>
+            
+            <div style="background: white; padding: 15pt;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15pt; margin-bottom: 20pt;">
+                    <div>
+                        <div style="font-size: 10pt; color: #666; margin-bottom: 5pt;">Expected Revenue</div>
+                        <div style="font-size: 20pt; font-weight: bold; color: #667eea;">R 45,200</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 10pt; color: #666; margin-bottom: 5pt;">Expected Net Profit</div>
+                        <div style="font-size: 20pt; font-weight: bold; color: #28a745;">R 12,010</div>
+                    </div>
+                </div>
+                
+                <table>
+                    <tr>
+                        <th>Item</th>
+                        <th>Amount</th>
+                    </tr>
+                    <tr>
+                        <td>Revenue (projected sales)</td>
+                        <td style="color: #28a745; font-weight: bold;">+ R 45,200</td>
+                    </tr>
+                    <tr>
+                        <td>Success & Fulfilment Fees</td>
+                        <td style="color: #dc3545;">- R 9,850</td>
+                    </tr>
+                    <tr>
+                        <td>COGS (projected sales)</td>
+                        <td style="color: #dc3545;">- R 22,600</td>
+                    </tr>
+                    <tr>
+                        <td>Storage Fees (current stock)</td>
+                        <td style="color: #dc3545;">- R 340</td>
+                    </tr>
+                    <tr>
+                        <td>Subscription Fee</td>
+                        <td style="color: #dc3545;">- R 400</td>
+                    </tr>
+                    <tr style="background: #e8f5e9; font-weight: bold;">
+                        <td><strong>Net Profit (30 days)</strong></td>
+                        <td style="color: #28a745; font-size: 14pt;"><strong>R 12,010</strong></td>
+                    </tr>
+                </table>
+                
+                <div style="margin-top: 20pt; padding: 12pt; background: #f0f8ff; border-radius: 6px;">
+                    <div style="font-weight: bold; margin-bottom: 5pt;">💰 Upcoming Payouts:</div>
+                    <div style="font-size: 10pt;">
+                        • <strong>Next payout:</strong> R 8,450 (in 5 days)<br>
+                        • <strong>Outstanding:</strong> R 3,200 (orders not yet settled)<br>
+                        • <strong>Projected (week after):</strong> R 6,800
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <p><strong>Why It's Irresistible:</strong> Predictability. Sellers can plan cash flow instead of being surprised by fees.</p>
+        
+        <h2>Advanced Features (Phase 2+)</h2>
+        
+        <h3>Feature 7: Portfolio Health Score</h3>
+        
+        <div class="ui-mockup">
+            <div style="text-align: center; padding: 20pt;">
+                <div style="font-size: 12pt; color: #666; margin-bottom: 10pt;">Your Portfolio Health Score</div>
+                <div style="position: relative; width: 200pt; height: 200pt; margin: 0 auto; border-radius: 50%; background: conic-gradient(#28a745 0% 78%, #e0e0e0 78% 100%); display: flex; align-items: center; justify-content: center;">
+                    <div style="width: 160pt; height: 160pt; background: white; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <div style="font-size: 48pt; font-weight: bold; color: #28a745;">78</div>
+                        <div style="font-size: 11pt; color: #666;">Good Health</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20pt; text-align: left; max-width: 400pt; margin-left: auto; margin-right: auto;">
+                    <div style="margin-bottom: 10pt;">
+                        <div style="display: flex; justify-content: space-between; font-size: 10pt; margin-bottom: 3pt;">
+                            <span>Avg Profit Margin</span>
+                            <span style="font-weight: bold; color: #28a745;">32/40 pts</span>
+                        </div>
+                        <div style="width: 100%; height: 8pt; background: #e0e0e0; border-radius: 4pt;">
+                            <div style="width: 80%; height: 100%; background: #28a745; border-radius: 4pt;"></div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 10pt;">
+                        <div style="display: flex; justify-content: space-between; font-size: 10pt; margin-bottom: 3pt;">
+                            <span>Buy Box Win Rate</span>
+                            <span style="font-weight: bold; color: #ff9800;">18/25 pts</span>
+                        </div>
+                        <div style="width: 100%; height: 8pt; background: #e0e0e0; border-radius: 4pt;">
+                            <div style="width: 72%; height: 100%; background: #ff9800; border-radius: 4pt;"></div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 10pt;">
+                        <div style="display: flex; justify-content: space-between; font-size: 10pt; margin-bottom: 3pt;">
+                            <span>Stock Efficiency</span>
+                            <span style="font-weight: bold; color: #28a745;">16/20 pts</span>
+                        </div>
+                        <div style="width: 100%; height: 8pt; background: #e0e0e0; border-radius: 4pt;">
+                            <div style="width: 80%; height: 100%; background: #28a745; border-radius: 4pt;"></div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 10pt;">
+                        <div style="display: flex; justify-content: space-between; font-size: 10pt; margin-bottom: 3pt;">
+                            <span>Fee Optimization</span>
+                            <span style="font-weight: bold; color: #28a745;">12/15 pts</span>
+                        </div>
+                        <div style="width: 100%; height: 8pt; background: #e0e0e0; border-radius: 4pt;">
+                            <div style="width: 80%; height: 100%; background: #28a745; border-radius: 4pt;"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 15pt; padding: 12pt; background: #fff3cd; border-radius: 6px; text-align: left;">
+                    <strong>💡 To improve your score:</strong><br>
+                    • Increase Buy Box wins by lowering prices on 3 products (would add +5 pts)<br>
+                    • Reduce storage fees by moving slow stock (would add +2 pts)
+                </div>
+            </div>
+        </div>
+        
+        <h3>Feature 8: Multi-Period Comparison</h3>
+        
+        <div class="ui-mockup">
+            <h4>📈 Profit Trends</h4>
+            <div style="background: white; padding: 15pt;">
+                <div style="font-size: 9pt; color: #666; margin-bottom: 10pt;">
+                    View: <button style="padding: 5pt 10pt; margin: 0 3pt;">Week</button> <button style="padding: 5pt 10pt; margin: 0 3pt; background: #667eea; color: white; border: none; border-radius: 4px;">Month</button> <button style="padding: 5pt 10pt; margin: 0 3pt;">Quarter</button>
+                </div>
+                
+                <div style="height: 200pt; background: linear-gradient(to top, #f8f9fa 0%, white 100%); border: 1px solid #e0e0e0; border-radius: 6px; position: relative;">
+                    <div style="position: absolute; bottom: 20pt; left: 10%; width: 8%; height: 45%; background: #667eea; border-radius: 4px 4px 0 0;"></div>
+                    <div style="position: absolute; bottom: 20pt; left: 22%; width: 8%; height: 52%; background: #667eea; border-radius: 4px 4px 0 0;"></div>
+                    <div style="position: absolute; bottom: 20pt; left: 34%; width: 8%; height: 38%; background: #667eea; border-radius: 4px 4px 0 0;"></div>
+                    <div style="position: absolute; bottom: 20pt; left: 46%; width: 8%; height: 60%; background: #667eea; border-radius: 4px 4px 0 0;"></div>
+                    <div style="position: absolute; bottom: 20pt; left: 58%; width: 8%; height: 48%; background: #667eea; border-radius: 4px 4px 0 0;"></div>
+                    <div style="position: absolute; bottom: 20pt; left: 70%; width: 8%; height: 70%; background: #667eea; border-radius: 4px 4px 0 0;"></div>
+                    <div style="position: absolute; bottom: 20pt; left: 82%; width: 8%; height: 85%; background: #28a745; border-radius: 4px 4px 0 0;"></div>
+                    
+                    <div style="position: absolute; bottom: 5pt; left: 10%; font-size: 8pt;">Jul</div>
+                    <div style="position: absolute; bottom: 5pt; left: 22%; font-size: 8pt;">Aug</div>
+                    <div style="position: absolute; bottom: 5pt; left: 34%; font-size: 8pt;">Sep</div>
+                    <div style="position: absolute; bottom: 5pt; left: 46%; font-size: 8pt;">Oct</div>
+                    <div style="position: absolute; bottom: 5pt; left: 58%; font-size: 8pt;">Nov</div>
+                    <div style="position: absolute; bottom: 5pt; left: 70%; font-size: 8pt;">Dec</div>
+                    <div style="position: absolute; bottom: 5pt; left: 82%; font-size: 8pt; font-weight: bold;">Jan</div>
+                </div>
+                
+                <div style="margin-top: 15pt; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10pt;">
+                    <div style="text-align: center; padding: 10pt; background: #f8f9fa; border-radius: 4px;">
+                        <div style="font-size: 9pt; color: #666;">This Month</div>
+                        <div style="font-size: 16pt; font-weight: bold; color: #28a745;">R 18,923</div>
+                    </div>
+                    <div style="text-align: center; padding: 10pt; background: #f8f9fa; border-radius: 4px;">
+                        <div style="font-size: 9pt; color: #666;">Last Month</div>
+                        <div style="font-size: 16pt; font-weight: bold;">R 16,450</div>
+                    </div>
+                    <div style="text-align: center; padding: 10pt; background: #e8f5e9; border-radius: 4px;">
+                        <div style="font-size: 9pt; color: #666;">Growth</div>
+                        <div style="font-size: 16pt; font-weight: bold; color: #28a745;">+15.0%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- IMPLEMENTATION ROADMAP -->
+    <div class="section">
+        <h1>5. Implementation Roadmap</h1>
+        
+        <h2>Phase 1: MVP (Weeks 1-6) - "Validate Core Value"</h2>
+        
+        <div class="highlight-box">
+            <h3>Goal: Prove that sellers will use this and find it valuable</h3>
+            <p><strong>Success Metric:</strong> 50 active sellers, 80% discover at least one unprofitable product</p>
+        </div>
+        
+        <h3>Week-by-Week Breakdown</h3>
+        
+        <table>
+            <tr>
+                <th>Week</th>
+                <th>Deliverable</th>
+                <th>Details</th>
+            </tr>
+            <tr>
+                <td><strong>Week 1-2</strong></td>
+                <td>API Integration POC</td>
+                <td>
+                    • Set up OAuth with Takealot<br>
+                    • Fetch orders endpoint working<br>
+                    • Fetch products/offers endpoint working<br>
+                    • Store in PostgreSQL<br>
+                    • Basic fee calculation engine (success + fulfilment)
+                </td>
+            </tr>
+            <tr>
+                <td><strong>Week 3-4</strong></td>
+                <td>Core Profit Calculation + Database</td>
+                <td>
+                    • Implement full fee schedule logic<br>
+                    • Match fees to orders (aggregation handling)<br>
+                    • Build profitability_snapshots table<br>
+                    • Create initial profit calculation (without COGS, use estimates)<br>
+                    • Reconciliation logic for actual vs calculated fees
+                </td>
+            </tr>
+            <tr>
+                <td><strong>Week 5</strong></td>
+                <td>Basic Dashboard UI</td>
+                <td>
+                    • React frontend setup<br>
+                    • Live Profitability Scorecard (top metrics)<br>
+                    • Product Performance Table (sortable, filterable)<br>
+                    • Simple authentication (email + password)<br>
+                    • Mobile-responsive design
+                </td>
+            </tr>
+            <tr>
+                <td><strong>Week 6</strong></td>
+                <td>Onboarding Flow + COGS Input</td>
+                <td>
+                    • Onboarding wizard: OAuth → Add COGS → See results<br>
+                    • COGS input interface (per product)<br>
+                    • "First Scan" results page showing loss-makers<br>
+                    • Basic alert system (email when loss detected)<br>
+                    • CSV export feature
+                </td>
+            </tr>
+        </table>
+        
+        <div class="success-box">
+            <h3>MVP Feature Checklist</h3>
+            <ul style="list-style: none; padding-left: 0;">
+                <li>✅ OAuth integration with Takealot</li>
+                <li>✅ Fetch last 30 days of orders + products</li>
+                <li>✅ Calculate success fees + fulfilment fees accurately</li>
+                <li>✅ Show total revenue vs actual profit</li>
+                <li>✅ Product performance table (sortable)</li>
+                <li>✅ Identify top 3 loss-making products</li>
+                <li>✅ Manual COGS input (wizard)</li>
+                <li>✅ Basic email alerts (loss detected)</li>
+                <li>✅ Mobile-responsive UI</li>
+                <li>❌ Real-time webhooks (Phase 2)</li>
+                <li>❌ Price optimizer (Phase 2)</li>
+                <li>❌ Competitor tracking (Phase 3)</li>
+            </ul>
+        </div>
+        
+        <h3>Beta Testing Strategy</h3>
+        
+        <ol>
+            <li><strong>Recruit 10 beta testers</strong> from Takealot seller Facebook groups
+                <ul>
+                    <li>Target: Sellers with 20-50 products (real pain point, manageable for testing)</li>
+                    <li>Offer: Free lifetime access in exchange for feedback</li>
+                </ul>
+            </li>
+            <li><strong>Week 1 of beta:</strong> Onboarding + data sync
+                <ul>
+                    <li>Monitor: How long does onboarding take? Where do they get stuck?</li>
+                    <li>Goal: <5 minutes to see first insights</li>
+                </ul>
+            </li>
+            <li><strong>Week 2-4 of beta:</strong> Daily use
+                <ul>
+                    <li>Track: Do they log in daily? What features do they use most?</li>
+                    <li>Interview: What "aha!" moments did they have?</li>
+                </ul>
+            </li>
+            <li><strong>Week 5-6:</strong> Iterate based on feedback
+                <ul>
+                    <li>Fix: Top 3 pain points</li>
+                    <li>Add: Most-requested feature</li>
+                </ul>
+            </li>
+        </ol>
+        
+        <h2>Phase 2: Optimization Tools (Weeks 7-14)</h2>
+        
+        <div class="highlight-box">
+            <h3>Goal: Make the dashboard indispensable with actionable tools</h3>
+            <p><strong>Success Metric:</strong> 200 sellers, 60% implement at least one price change based on recommendations</p>
+        </div>
+        
+        <h3>Features to Build</h3>
+        
+        <ul>
+            <li><strong>Webhook Integration</strong> (Week 7-8)
+                <ul>
+                    <li>Real-time order notifications</li>
+                    <li>Instant profitability calculation on new sales</li>
+                    <li>Push notifications via email/SMS</li>
+                </ul>
+            </li>
+            <li><strong>Price Optimizer</strong> (Week 9-10)
+                <ul>
+                    <li>Interactive slider to test price scenarios</li>
+                    <li>Buy Box probability estimation</li>
+                    <li>"What if" profit projections</li>
+                </ul>
+            </li>
+            <li><strong>Smart Recommendations Engine</strong> (Week 11-12)
+                <ul>
+                    <li>Automated alerts for loss-making products</li>
+                    <li>Storage fee warnings (before 35 days)</li>
+                    <li>IBT penalty prevention (stock balancing alerts)</li>
+                    <li>Buy Box opportunity detection</li>
+                </ul>
+            </li>
+            <li><strong>Cash Flow Forecaster</strong> (Week 13-14)
+                <ul>
+                    <li>30-day profit projection</li>
+                    <li>Upcoming payout calendar</li>
+                    <li>Expected storage fees based on current stock</li>
+                </ul>
+            </li>
+        </ul>
+        
+        <h2>Phase 3: Advanced Intelligence (Weeks 15-24)</h2>
+        
+        <div class="highlight-box">
+            <h3>Goal: Differentiate with features competitors can't easily replicate</h3>
+            <p><strong>Success Metric:</strong> 500 sellers, R50k+ MRR, 30% on paid plans</p>
+        </div>
+        
+        <h3>Features to Build</h3>
+        
+        <ul>
+            <li><strong>Competitor Price Tracking</strong> (Week 15-17)
+                <ul>
+                    <li>Daily web scraping of Takealot product pages</li>
+                    <li>Buy Box winner detection</li>
+                    <li>Price drop/increase alerts</li>
+                    <li>Competitive positioning dashboard</li>
+                </ul>
+            </li>
+            <li><strong>Portfolio Health Score</strong> (Week 18-19)
+                <ul>
+                    <li>Weighted algorithm across 4 dimensions</li>
+                    <li>Visual speedometer UI</li>
+                    <li>Actionable breakdown of score</li>
+                    <li>Historical score tracking</li>
+                </ul>
+            </li>
+            <li><strong>Multi-Period Analysis</strong> (Week 20-21)
+                <ul>
+                    <li>Week/Month/Quarter comparisons</li>
+                    <li>Year-over-year trends</li>
+                    <li>Product lifecycle tracking</li>
+                    <li>Seasonal pattern detection</li>
+                </ul>
+            </li>
+            <li><strong>Advanced Reporting</strong> (Week 22-24)
+                <ul>
+                    <li>Tax-ready P&L statements</li>
+                    <li>Custom date range reports</li>
+                    <li>Product category performance</li>
+                    <li>Fee reconciliation exports</li>
+                </ul>
+            </li>
+        </ul>
+        
+        <h2>Phase 4: Ecosystem Expansion (Ongoing)</h2>
+        
+        <ul>
+            <li><strong>Integrations</strong>
+                <ul>
+                    <li>Accounting software (Xero, Sage, QuickBooks)</li>
+                    <li>Inventory management systems</li>
+                    <li>Courier booking platforms</li>
+                    <li>Supplier cost tracking</li>
+                </ul>
+            </li>
+            <li><strong>Mobile App</strong>
+                <ul>
+                    <li>React Native iOS + Android</li>
+                    <li>Push notifications for critical alerts</li>
+                    <li>Quick price updates on the go</li>
+                </ul>
+            </li>
+            <li><strong>Team Features</strong>
+                <ul>
+                    <li>Multi-user accounts</li>
+                    <li>Role-based permissions</li>
+                    <li>Activity logs</li>
+                </ul>
+            </li>
+            <li><strong>AI/ML Enhancements</strong>
+                <ul>
+                    <li>Predictive demand forecasting</li>
+                    <li>Automated price optimization (dynamic pricing)</li>
+                    <li>Seasonal trend predictions</li>
+                </ul>
+            </li>
+        </ul>
+    </div>
+
+    <!-- MONETIZATION STRATEGY -->
+    <div class="section">
+        <h1>6. Monetization Strategy</h1>
+        
+        <h2>Pricing Tiers</h2>
+        
+        <div class="pricing-table">
+            <div class="pricing-tier">
+                <div class="tier-name">Free</div>
+                <div class="tier-price">R 0<small>/month</small></div>
+                <div style="font-size: 10pt; color: #666; margin-bottom: 15pt;">Lead Magnet</div>
+                <div class="tier-features">
+                    <ul style="list-style: none; padding-left: 0;">
+                        <li>✓ Up to 20 products</li>
+                        <li>✓ 30-day history</li>
+                        <li>✓ Basic profitability dashboard</li>
+                        <li>✓ Manual COGS entry</li>
+                        <li>✓ Product performance table</li>
+                        <li>✗ Real-time webhooks</li>
+                        <li>✗ Smart alerts</li>
+                        <li>✗ Price optimizer</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="pricing-tier">
+                <div class="tier-name">Starter</div>
+                <div class="tier-price">R 299<small>/month</small></div>
+                <div style="font-size: 10pt; color: #666; margin-bottom: 15pt;">Most Popular</div>
+                <div class="tier-features">
+                    <ul style="list-style: none; padding-left: 0;">
+                        <li>✓ Unlimited products</li>
+                        <li>✓ 12-month history</li>
+                        <li>✓ Real-time webhooks</li>
+                        <li>✓ Smart alerts (5/month)</li>
+                        <li>✓ Price optimizer</li>
+                        <li>✓ CSV import for COGS</li>
+                        <li>✓ Cash flow forecaster</li>
+                        <li>✗ Competitor tracking</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="pricing-tier featured">
+                <div class="tier-name">Professional</div>
+                <div class="tier-price">R 699<small>/month</small></div>
+                <div style="font-size: 10pt; color: #667eea; font-weight: bold; margin-bottom: 15pt;">BEST VALUE</div>
+                <div class="tier-features">
+                    <ul style="list-style: none; padding-left: 0;">
+                        <li>✓ Everything in Starter</li>
+                        <li>✓ Unlimited alerts</li>
+                        <li>✓ Competitor price tracking (20 products)</li>
+                        <li>✓ Multi-DC optimization</li>
+                        <li>✓ Portfolio health score</li>
+                        <li>✓ Multi-period analysis</li>
+                        <li>✓ Priority support</li>
+                        <li>✓ Custom reports</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="pricing-tier">
+                <div class="tier-name">Enterprise</div>
+                <div class="tier-price">R 1,499<small>/month</small></div>
+                <div style="font-size: 10pt; color: #666; margin-bottom: 15pt;">Power Sellers</div>
+                <div class="tier-features">
+                    <ul style="list-style: none; padding-left: 0;">
+                        <li>✓ Everything in Professional</li>
+                        <li>✓ API access</li>
+                        <li>✓ Multi-user accounts (up to 10)</li>
+                        <li>✓ White-label option</li>
+                        <li>✓ Dedicated account manager</li>
+                        <li>✓ Custom integrations</li>
+                        <li>✓ SLA guarantee</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <h2>Value Proposition by Tier</h2>
+        
+        <div class="highlight-box">
+            <h3>ROI Calculation Example (Professional Tier at R699/month)</h3>
+            
+            <p>If the dashboard helps a seller:</p>
+            <ul>
+                <li><strong>Avoid ONE unprofitable restock:</strong> R1,000+ saved</li>
+                <li><strong>Win Buy Box on 2 products:</strong> R500+ extra profit/month</li>
+                <li><strong>Eliminate 5 IBT penalties:</strong> R400+ saved</li>
+                <li><strong>Optimize pricing on 3 products:</strong> R300+ extra/month</li>
+            </ul>
+            
+            <p style="font-size: 14pt; font-weight: bold; color: #28a745; margin-top: 15pt;">
+                Total Monthly Value: R2,200+<br>
+                Dashboard Cost: R699<br>
+                Net Benefit: R1,501/month<br>
+                <span style="font-size: 12pt;">ROI: Break-even in week 1, 215% ROI ongoing</span>
+            </p>
+        </div>
+        
+        <h2>Revenue Projections (12 Months)</h2>
+        
+        <table>
+            <tr>
+                <th>Month</th>
+                <th>Total Sellers</th>
+                <th>Free</th>
+                <th>Starter (R299)</th>
+                <th>Pro (R699)</th>
+                <th>Enterprise (R1499)</th>
+                <th>MRR</th>
+                <th>ARR</th>
+            </tr>
+            <tr>
+                <td><strong>Month 1-2</strong></td>
+                <td>50</td>
+                <td>45</td>
+                <td>5</td>
+                <td>0</td>
+                <td>0</td>
+                <td>R 1,495</td>
+                <td>R 17,940</td>
+            </tr>
+            <tr>
+                <td><strong>Month 3-4</strong></td>
+                <td>150</td>
+                <td>120</td>
+                <td>25</td>
+                <td>5</td>
+                <td>0</td>
+                <td>R 10,970</td>
+                <td>R 131,640</td>
+            </tr>
+            <tr>
+                <td><strong>Month 5-6</strong></td>
+                <td>300</td>
+                <td>210</td>
+                <td>70</td>
+                <td>18</td>
+                <td>2</td>
+                <td>R 36,280</td>
+                <td>R 435,360</td>
+            </tr>
+            <tr>
+                <td><strong>Month 7-9</strong></td>
+                <td>500</td>
+                <td>300</td>
+                <td>140</td>
+                <td>55</td>
+                <td>5</td>
+                <td>R 87,600</td>
+                <td>R 1,051,200</td>
+            </tr>
+            <tr>
+                <td><strong>Month 10-12</strong></td>
+                <td>800</td>
+                <td>450</td>
+                <td>250</td>
+                <td>90</td>
+                <td>10</td>
+                <td>R 152,650</td>
+                <td>R 1,831,800</td>
+            </tr>
+        </table>
+        
+        <div class="success-box">
+            <h3>Year 1 Target: R1.8M ARR</h3>
+            <p><strong>Assumptions:</strong></p>
+            <ul>
+                <li>70% conversion from Free to Starter within 3 months (aggressive but justified by ROI)</li>
+                <li>30% upgrade from Starter to Professional within 6 months</li>
+                <li>10% annual churn rate (very low due to sticky product)</li>
+                <li>Growth through word-of-mouth + paid ads</li>
+            </ul>
+        </div>
+        
+        <h2>Additional Revenue Streams</h2>
+        
+        <table>
+            <tr>
+                <th>Revenue Stream</th>
+                <th>Description</th>
+                <th>Potential</th>
+            </tr>
+            <tr>
+                <td><strong>Affiliate Commissions</strong></td>
+                <td>Partner with courier services (Courier Guy), recommend to sellers for DC shipping, earn 10% commission</td>
+                <td>R50-R200/month/seller</td>
+            </tr>
+            <tr>
+                <td><strong>Takealot Ads Management</strong></td>
+                <td>Offer to manage Takealot Sponsored Ads for sellers (% of ad spend)</td>
+                <td>10% of ad spend (~R1000/month/seller)</td>
+            </tr>
+            <tr>
+                <td><strong>White-Label Solution</strong></td>
+                <td>License dashboard to Takealot for their official seller portal (long-term partnership)</td>
+                <td>R500k-R2M annual license</td>
+            </tr>
+            <tr>
+                <td><strong>Data Insights Report</strong></td>
+                <td>Aggregated (anonymous) market insights for suppliers/brands wanting to understand Takealot marketplace</td>
+                <td>R50k-R200k per report</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- GO-TO-MARKET PLAN -->
+    <div class="section">
+        <h1>7. Go-to-Market Plan</h1>
+        
+        <h2>Target Customer Segments</h2>
+        
+        <table>
+            <tr>
+                <th>Segment</th>
+                <th>Size</th>
+                <th>Pain Point</th>
+                <th>Our Hook</th>
+                <th>Priority</th>
+            </tr>
+            <tr style="background: #e8f5e9;">
+                <td><strong>New Sellers</strong><br>(0-50 products)</td>
+                <td>~5,000 sellers</td>
+                <td>Overwhelmed by fees, guessing at profitability, making beginner mistakes</td>
+                <td>"Know your profit on every sale from day 1"</td>
+                <td><strong>PRIMARY</strong></td>
+            </tr>
+            <tr>
+                <td><strong>Growing Sellers</strong><br>(50-500 products)</td>
+                <td>~8,000 sellers</td>
+                <td>Too many products to track manually, hidden losses, spending 2-3 hrs/week on spreadsheets</td>
+                <td>"Automate what takes you 10 hours/week"</td>
+                <td><strong>SECONDARY</strong></td>
+            </tr>
+            <tr>
+                <td><strong>Power Sellers</strong><br>(500+ products)</td>
+                <td>~2,000 sellers</td>
+                <td>Complex operations, need team access, advanced analytics, API integrations</td>
+                <td>"Enterprise-grade profit analytics for serious sellers"</td>
+                <td><strong>TERTIARY</strong></td>
+            </tr>
+        </table>
+        
+        <h2>Marketing Channels & Tactics</h2>
+        
+        <h3>1. Community Marketing (Organic - Month 1-3)</h3>
+        
+        <div class="highlight-box">
+            <h4>Facebook Groups</h4>
+            <ul>
+                <li><strong>"Takealot Sellers South Africa"</strong> (15,000+ members)
+                    <ul>
+                        <li>Post helpful content: "The 5 hidden fees killing your Takealot profit"</li>
+                        <li>Answer questions about profitability calculation</li>
+                        <li>Share success stories from beta testers</li>
+                        <li>Offer free tool access in exchange for feedback</li>
+                    </ul>
+                </li>
+                <li><strong>WhatsApp Seller Communities</strong>
+                    <ul>
+                        <li>Get admin permission to share tool</li>
+                        <li>Provide value first (free profitability tips)</li>
+                    </ul>
+                </li>
+            </ul>
+            
+            <h4>Reddit & Forums</h4>
+            <ul>
+                <li>r/Entrepreneur (South Africa flair)</li>
+                <li>Takealot Seller Portal forums</li>
+                <li>Share case studies, not ads</li>
+            </ul>
+        </div>
+        
+        <h3>2. Content Marketing (Month 2-6)</h3>
+        
+        <div class="ui-mockup">
+            <h4>Blog Strategy</h4>
+            <table>
+                <tr>
+                    <th>Content Type</th>
+                    <th>Example Topics</th>
+                    <th>SEO Goal</th>
+                </tr>
+                <tr>
+                    <td><strong>Educational</strong></td>
+                    <td>• "How to Calculate Takealot Fees (Complete Guide 2026)"<br>• "Understanding the Buy Box Algorithm"<br>• "VAT vs Non-VAT Sellers: Profitability Analysis"</td>
+                    <td>Rank for "takealot fees calculator"</td>
+                </tr>
+                <tr>
+                    <td><strong>Case Studies</strong></td>
+                    <td>• "How Sarah Increased Profit 50% in 30 Days"<br>• "From R8k to R12k Monthly Profit"</td>
+                    <td>Social proof, conversions</td>
+                </tr>
+                <tr>
+                    <td><strong>Data Reports</strong></td>
+                    <td>• "2026 Takealot Seller Profitability Benchmark Report"<br>• "Which Product Categories Are Most Profitable?"</td>
+                    <td>Backlinks, authority</td>
+                </tr>
+            </table>
+        </div>
+        
+        <h3>3. YouTube Marketing (Month 3-9)</h3>
+        
+        <ul>
+            <li><strong>Tutorial Videos</strong>
+                <ul>
+                    <li>"How to Calculate Your Real Profit on Takealot (Step-by-Step)"</li>
+                    <li>"Takealot Fees Explained for Beginners"</li>
+                    <li>"How to Use [Our Dashboard] to Find Loss-Making Products"</li>
+                </ul>
+            </li>
+            <li><strong>Live Q&A Sessions</strong>
+                <ul>
+                    <li>Monthly "Ask Me Anything About Takealot Profitability"</li>
+                    <li>Invite successful sellers to share strategies</li>
+                </ul>
+            </li>
+        </ul>
+        
+        <h3>4. Paid Advertising (Month 4-12)</h3>
+        
+        <table>
+            <tr>
+                <th>Channel</th>
+                <th>Budget/Month</th>
+                <th>Target</th>
+                <th>Expected CAC</th>
+            </tr>
+            <tr>
+                <td><strong>Google Ads</strong></td>
+                <td>R10,000</td>
+                <td>Keywords: "takealot profit calculator", "takealot fees", "takealot seller tools"</td>
+                <td>R150-R300</td>
+            </tr>
+            <tr>
+                <td><strong>Facebook Ads</strong></td>
+                <td>R8,000</td>
+                <td>Custom audience: People in Takealot seller groups</td>
+                <td>R120-R250</td>
+            </tr>
+            <tr>
+                <td><strong>YouTube Ads</strong></td>
+                <td>R5,000</td>
+                <td>Pre-roll on Takealot tutorial videos</td>
+                <td>R180-R350</td>
+            </tr>
+        </table>
+        
+        <div class="highlight-box">
+            <h4>CAC vs LTV Calculation</h4>
+            <p><strong>Assumptions:</strong></p>
+            <ul>
+                <li>Average CAC (Customer Acquisition Cost): R200</li>
+                <li>Average subscription: R499/month (weighted average across tiers)</li>
+                <li>Average customer lifetime: 24 months (based on 10% annual churn)</li>
+                <li>LTV (Lifetime Value): R499 × 24 = R11,976</li>
+            </ul>
+            <p style="font-size: 14pt; font-weight: bold; color: #28a745;">
+                LTV:CAC Ratio = 60:1 (Excellent - target is 3:1 minimum)
+            </p>
+        </div>
+        
+        <h3>5. Partnership Marketing (Month 6+)</h3>
+        
+        <ul>
+            <li><strong>Takealot Official Partnership</strong>
+                <ul>
+                    <li>Pitch to Takealot seller support team</li>
+                    <li>Get featured in seller newsletters</li>
+                    <li>Co-branded webinars</li>
+                </ul>
+            </li>
+            <li><strong>Accounting Software Integrations</strong>
+                <ul>
+                    <li>Partner with Xero, Sage</li>
+                    <li>Get listed in their app marketplaces</li>
+                </ul>
+            </li>
+            <li><strong>Courier Companies</strong>
+                <ul>
+                    <li>Courier Guy, Ram Couriers</li>
+                    <li>Offer discounts to our users, earn affiliate fees</li>
+                </ul>
+            </li>
+        </ul>
+        
+        <h2>Launch Strategy</h2>
+        
+        <div class="ui-mockup">
+            <h4>The "Free for First Month" Campaign</h4>
+            
+            <div style="background: white; padding: 20pt;">
+                <div style="text-align: center; margin-bottom: 20pt;">
+                    <div style="font-size: 24pt; font-weight: bold; color: #667eea;">Try Professional FREE for 30 Days</div>
+                    <div style="font-size: 12pt; color: #666; margin-top: 5pt;">No credit card required</div>
+                </div>
+                
+                <div style="background: #f0f4ff; padding: 15pt; border-radius: 8px; margin-bottom: 15pt;">
+                    <div style="font-weight: bold; margin-bottom: 10pt;">What happens during your free month:</div>
+                    <ul style="font-size: 10pt;">
+                        <li>Day 1: Connect your Takealot account → See your first profitability scan</li>
+                        <li>Week 1: Discover hidden losses, get smart recommendations</li>
+                        <li>Week 2-4: Implement price optimizations, avoid storage fees</li>
+                        <li>End of Month: See exactly how much you saved/earned</li>
+                    </ul>
+                </div>
+                
+                <div style="text-align: center; padding: 15pt; background: #e8f5e9; border-radius: 8px;">
+                    <div style="font-size: 18pt; font-weight: bold; color: #28a745; margin-bottom: 5pt;">Average Savings in Month 1:</div>
+                    <div style="font-size: 32pt; font-weight: bold; color: #28a745;">R2,450</div>
+                    <div style="font-size: 11pt; color: #666; margin-top: 10pt;">After 30 days: "You saved R2,450 in fees and made R1,800 extra profit.<br>Continue for R699/month?"</div>
+                </div>
+            </div>
+        </div>
+        
+        <h2>Viral Loop / Referral Program</h2>
+        
+        <div class="highlight-box">
+            <h3>Refer-a-Seller Program</h3>
+            <ul>
+                <li>Existing user refers new seller → Both get 1 month free</li>
+                <li>Refer 5 sellers → Get Professional tier free for life</li>
+                <li>Make referrals easy: "Share your profitability wins on social media → automatic tracking"</li>
+            </ul>
+            
+            <p><strong>Why It Works:</strong> Sellers naturally want to share wins. "I just discovered I was losing R850/month on products I didn't know about!" is compelling content.</p>
+        </div>
+    </div>
+
+    <!-- RISK MITIGATION -->
+    <div class="section">
+        <h1>8. Risk Mitigation & Implementation Challenges</h1>
+        
+        <h2>Technical Risks</h2>
+        
+        <table>
+            <tr>
+                <th>Risk</th>
+                <th>Likelihood</th>
+                <th>Impact</th>
+                <th>Mitigation Strategy</th>
+            </tr>
+            <tr>
+                <td><strong>Takealot API Changes</strong><br>Endpoints deprecated or structure changed</td>
+                <td style="background: #fff3cd;">MEDIUM</td>
+                <td style="background: #f8d7da;">HIGH</td>
+                <td>
+                    • Use version pinning (stick to stable API versions)<br>
+                    • Build fallback: CSV upload option if API fails<br>
+                    • Monitor Takealot developer announcements<br>
+                    • Maintain good relationship with Takealot tech team
+                </td>
+            </tr>
+            <tr>
+                <td><strong>Fee Calculation Errors</strong><br>Our calculations don't match Takealot's actual fees</td>
+                <td style="background: #fff3cd;">MEDIUM</td>
+                <td style="background: #fff3cd;">MEDIUM</td>
+                <td>
+                    • Daily reconciliation: Compare our calculated fees vs actual from API<br>
+                    • Alert user if >5% discrepancy<br>
+                    • Build "Actual vs Calculated" report for debugging<br>
+                    • Update fee schedule immediately when Takealot announces changes
+                </td>
+            </tr>
+            <tr>
+                <td><strong>Data Privacy Breach</strong><br>Seller financial data exposed</td>
+                <td style="background: #d4edda;">LOW</td>
+                <td style="background: #f8d7da;">CRITICAL</td>
+                <td>
+                    • Encrypt all API tokens at rest (AES-256)<br>
+                    • HTTPS only, TLS 1.3<br>
+                    • Regular security audits (penetration testing)<br>
+                    • POPIA compliance audit before launch<br>
+                    • Insurance for data breaches
+                </td>
+            </tr>
+            <tr>
+                <td><strong>Scalability Issues</strong><br>System can't handle 1000+ sellers</td>
+                <td style="background: #fff3cd;">MEDIUM</td>
+                <td style="background: #fff3cd;">MEDIUM</td>
+                <td>
+                    • Design for scale from day 1 (PostgreSQL with read replicas)<br>
+                    • Use Redis caching aggressively<br>
+                    • Queue background jobs (don't block UI)<br>
+                    • Load testing before major launches<br>
+                    • Auto-scaling infrastructure (Kubernetes or serverless)
+                </td>
+            </tr>
+            <tr>
+                <td><strong>Web Scraping Blocked</strong><br>Takealot blocks our competitor price scraper</td>
+                <td style="background: #fff3cd;">MEDIUM</td>
+                <td style="background: #d4edda;">LOW</td>
+                <td>
+                    • Use residential proxies + rotating user agents<br>
+                    • Rate limit ourselves (don't be aggressive)<br>
+                    • Fallback: Manual price input from sellers<br>
+                    • Consider partnership with Takealot for official access
+                </td>
+            </tr>
+        </table>
+        
+        <h2>Business Risks</h2>
+        
+        <table>
+            <tr>
+                <th>Risk</th>
+                <th>Likelihood</th>
+                <th>Impact</th>
+                <th>Mitigation Strategy</th>
+            </tr>
+            <tr>
+                <td><strong>Takealot Builds This Themselves</strong><br>They add profitability dashboard to seller portal</td>
+                <td style="background: #fff3cd;">MEDIUM</td>
+                <td style="background: #f8d7da;">CRITICAL</td>
+                <td>
+                    • Move fast - launch before they do<br>
+                    • Build features they won't (competitor tracking, AI optimization)<br>
+                    • Pivot to white-label solution for Takealot<br>
+                    • Build moat: Superior UX, faster innovation, better support<br>
+                    • Expand to other platforms (Shopify, WooCommerce integrations)
+                </td>
+            </tr>
+            <tr>
+                <td><strong>Inaccurate COGS Data from Sellers</strong><br>Profit calculations are wrong due to bad input</td>
+                <td style="background: #f8d7da;">HIGH</td>
+                <td style="background: #fff3cd;">MEDIUM</td>
+                <td>
+                    • Educate sellers on what to include in COGS<br>
+                    • Provide COGS templates/checklists<br>
+                    • Allow historical editing (easy to fix mistakes)<br>
+                    • CSV import from supplier invoices<br>
+                    • ML anomaly detection: "This COGS seems too low for this category"<br>
+                    • Clearly label estimates vs actuals in UI
+                </td>
+            </tr>
+            <tr>
+                <td><strong>Low Conversion from Free to Paid</strong><br>Users don't see enough value to upgrade</td>
+                <td style="background: #fff3cd;">MEDIUM</td>
+                <td style="background: #fff3cd;">MEDIUM</td>
+                <td>
+                    • Strong onboarding: Show "saved money" in first session<br>
+                    • Email drip campaign highlighting ROI<br>
+                    • Limit free tier strategically (20 products max)<br>
+                    • A/B test pricing and feature gates<br>
+                    • Offer first month free to reduce friction
+                </td>
+            </tr>
+            <tr>
+                <td><strong>High Churn Rate</strong><br>Sellers cancel after 1-2 months</td>
+                <td style="background: #d4edda;">LOW</td>
+                <td style="background: #fff3cd;">MEDIUM</td>
+                <td>
+                    • Build sticky features (historical data = lock-in)<br>
+                    • Regular engagement emails (weekly profit summaries)<br>
+                    • Exit interviews: Understand why they churn<br>
+                    • Offer annual plans with discount (reduce churn)<br>
+                    • Gamification: Streaks, achievements keep users engaged
+                </td>
+            </tr>
+            <tr>
+                <td><strong>Competitor Launches Similar Tool</strong><br>Stockburst, SellerMetrics add profitability features</td>
+                <td style="background: #f8d7da;">HIGH</td>
+                <td style="background: #fff3cd;">MEDIUM</td>
+                <td>
+                    • First-mover advantage: Launch fast<br>
+                    • Superior UX (our focus vs their inventory focus)<br>
+                    • Deeper profitability features (they'll be shallow)<br>
+                    • Better pricing (we can undercut)<br>
+                    • Community building: Create loyal user base
+                </td>
+            </tr>
+        </table>
+        
+        <h2>Legal & Compliance Risks</h2>
+        
+        <div class="warning-box">
+            <h3>⚖️ POPIA Compliance Checklist</h3>
+            <ul>
+                <li>✅ <strong>Data Processing Agreement:</strong> Clear terms on how we handle seller data</li>
+                <li>✅ <strong>Consent:</strong> Explicit opt-in for data collection and processing</li>
+                <li>✅ <strong>Data Security:</strong> Encryption, access controls, regular audits</li>
+                <li>✅ <strong>Data Minimization:</strong> Only collect what's necessary for profitability calculations</li>
+                <li>✅ <strong>Right to Access:</strong> Sellers can download all their data (CSV export)</li>
+                <li>✅ <strong>Right to Deletion:</strong> Sellers can delete account + all data</li>
+                <li>✅ <strong>Data Breach Notification:</strong> Plan to notify users within 24 hours if breach occurs</li>
+                <li>✅ <strong>Third-Party Processors:</strong> Ensure hosting providers (AWS/GCP) are POPIA-compliant</li>
+            </ul>
+            
+            <p><strong>Action:</strong> Hire POPIA consultant before launch (R15k-R30k one-time cost)</p>
+        </div>
+        
+        <h2>Contingency Plans</h2>
+        
+        <h3>If Takealot API Access is Revoked</h3>
+        <ol>
+            <li><strong>Immediate:</strong> Switch to CSV import mode (sellers manually upload Takealot reports)</li>
+            <li><strong>Week 1:</strong> Negotiate with Takealot - explain mutual benefit</li>
+            <li><strong>Week 2-4:</strong> Build OAuth compliance features if they have specific requirements</li>
+            <li><strong>Backup Plan:</strong> Pivot to multi-platform tool (Shopify, WooCommerce, Amazon)</li>
+        </ol>
+        
+        <h3>If Acquisition Costs Are Too High</h3>
+        <ol>
+            <li><strong>Pause paid ads</strong> → Focus on organic (content marketing, community)</li>
+            <li><strong>Improve conversion funnel</strong> → A/B test onboarding, pricing</li>
+            <li><strong>Referral program boost</strong> → Increase incentives (2 months free instead of 1)</li>
+            <li><strong>Partnership deals</strong> → Get Takealot to promote us to sellers</li>
+        </ol>
+    </div>
+
+    <!-- SUCCESS METRICS -->
+    <div class="section">
+        <h1>9. Success Metrics & KPIs</h1>
+        
+        <h2>Product Metrics (Weekly Tracking)</h2>
+        
+        <table>
+            <tr>
+                <th>Metric</th>
+                <th>Target</th>
+                <th>Why It Matters</th>
+            </tr>
+            <tr>
+                <td><strong>Daily Active Sellers (DAS)</strong></td>
+                <td>40% of total users</td>
+                <td>Measures engagement - sellers should check daily for profit updates</td>
+            </tr>
+            <tr>
+                <td><strong>Weekly Active Sellers (WAS)</strong></td>
+                <td>70% of total users</td>
+                <td>Healthy usage pattern</td>
+            </tr>
+            <tr>
+                <td><strong>Products Analyzed per Seller</strong></td>
+                <td>Avg 35 products</td>
+                <td>Depth of use - more products = more sticky</td>
+            </tr>
+            <tr>
+                <td><strong>Alerts Acted Upon</strong></td>
+                <td>55% of alerts</td>
+                <td>Measures if recommendations are valuable</td>
+            </tr>
+            <tr>
+                <td><strong>Price Optimizations Implemented</strong></td>
+                <td>15% of sellers/month</td>
+                <td>Proves ROI - they're making changes based on our data</td>
+            </tr>
+            <tr>
+                <td><strong>Time to First Insight</strong></td>
+                <td><90 seconds</td>
+                <td>Onboarding speed - faster = better conversion</td>
+            </tr>
+        </table>
+        
+        <h2>Business Metrics (Monthly Tracking)</h2>
+        
+        <table>
+            <tr>
+                <th>Metric</th>
+                <th>Month 3 Target</th>
+                <th>Month 6 Target</th>
+                <th>Month 12 Target</th>
+            </tr>
+            <tr>
+                <td><strong>Total Sellers</strong></td>
+                <td>150</td>
+                <td>300</td>
+                <td>800</td>
+            </tr>
+            <tr>
+                <td><strong>Paying Customers</strong></td>
+                <td>30</td>
+                <td>90</td>
+                <td>350</td>
+            </tr>
+            <tr>
+                <td><strong>MRR (Monthly Recurring Revenue)</strong></td>
+                <td>R 10,970</td>
+                <td>R 36,280</td>
+                <td>R 152,650</td>
+            </tr>
+            <tr>
+                <td><strong>Churn Rate</strong></td>
+                <td><15%</td>
+                <td><10%</td>
+                <td><5%</td>
+            </tr>
+            <tr>
+                <td><strong>CAC (Customer Acquisition Cost)</strong></td>
+                <td>R 150</td>
+                <td>R 200</td>
+                <td>R 250</td>
+            </tr>
+            <tr>
+                <td><strong>LTV (Lifetime Value)</strong></td>
+                <td>R 7,176</td>
+                <td>R 10,764</td>
+                <td>R 11,976</td>
+            </tr>
+            <tr>
+                <td><strong>LTV:CAC Ratio</strong></td>
+                <td>48:1</td>
+                <td>54:1</td>
+                <td>48:1</td>
+            </tr>
+        </table>
+        
+        <h2>Impact Metrics (For Marketing)</h2>
+        
+        <div class="highlight-box">
+            <h3>How We Measure Real Value Delivered</h3>
+            
+            <table>
+                <tr>
+                    <th>Impact Metric</th>
+                    <th>Calculation Method</th>
+                    <th>Marketing Use</th>
+                </tr>
+                <tr>
+                    <td><strong>Average Profit Increase</strong></td>
+                    <td>Compare first 30 days profit vs next 30 days after using dashboard</td>
+                    <td>"Sellers increase profit by 18% on average in first month"</td>
+                </tr>
+                <tr>
+                    <td><strong>Losses Prevented</strong></td>
+                    <td>Sum of all "loss-making product" alerts × sales volume × loss per sale</td>
+                    <td>"We've helped sellers avoid R2.4M in losses"</td>
+                </tr>
+                <tr>
+                    <td><strong>Time Saved</strong></td>
+                    <td>Survey: How many hours did you spend on profitability analysis before/after?</td>
+                    <td>"Sellers save 2.5 hours per week on average"</td>
+                </tr>
+                <tr>
+                    <td><strong>Buy Box Win Rate Improvement</strong></td>
+                    <td>Track sales velocity before/after price optimizations</td>
+                    <td>"35% increase in Buy Box wins after optimization"</td>
+                </tr>
+                <tr>
+                    <td><strong>Storage Fee Savings</strong></td>
+                    <td>Track stock days cover alerts acted upon × fee avoided</td>
+                    <td>"Sellers save R340/month on storage fees"</td>
+                </tr>
+            </table>
+        </div>
+        
+        <h2>Dashboard Analytics to Build</h2>
+        
+        <p>Internal analytics dashboard for our team to track product health:</p>
+        
+        <ul>
+            <li><strong>Cohort Analysis:</strong> Retention curves by signup month</li>
+            <li><strong>Feature Usage Heatmap:</strong> Which features are most/least used?</li>
+            <li><strong>Conversion Funnel:</strong> OAuth → Add COGS → See first insight → Upgrade to paid</li>
+            <li><strong>Churn Prediction:</strong> ML model to predict which sellers will churn (based on login frequency, alerts dismissed)</li>
+            <li><strong>Revenue Waterfall:</strong> Track MRR changes (new customers, upgrades, downgrades, churn)</li>
+        </ul>
+    </div>
+
+    <!-- APPENDIX -->
+    <div class="section">
+        <h1>10. Additional Strategic Considerations</h1>
+        
+        <h2>10.1 Additional Features to Consider (Future Phases)</h2>
+        
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="icon">🤖</div>
+                <h4>AI Price Bot</h4>
+                <p>Automated dynamic pricing that adjusts prices hourly based on competitor movements and demand</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="icon">📱</div>
+                <h4>Mobile Push Notifications</h4>
+                <p>"Big sale just made R85 profit!" instant gratification on mobile app</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="icon">📊</div>
+                <h4>Benchmark Reports</h4>
+                <p>Compare your margins to anonymous averages in your category (motivating)</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="icon">🎓</div>
+                <h4>Profit Academy</h4>
+                <p>Educational content: "How to win the Buy Box", "Optimizing for Black Friday"</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="icon">🔔</div>
+                <h4>Smart Restocking Alerts</h4>
+                <p>"Time to reorder USB Chargers - you'll sell out in 12 days at current rate"</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="icon">💬</div>
+                <h4>Community Forum</h4>
+                <p>Sellers share strategies, ask questions, build network effects</p>
+            </div>
+        </div>
+        
+        <h2>10.2 Competitive Differentiation Summary</h2>
+        
+        <table>
+            <tr>
+                <th>Feature</th>
+                <th>Us</th>
+                <th>Takealot Fee Estimator</th>
+                <th>Third-Party Tools</th>
+            </tr>
+            <tr>
+                <td><strong>Real-time profitability</strong></td>
+                <td style="background: #d4edda; font-weight: bold;">✓ Webhooks</td>
+                <td style="background: #f8d7da;">✗ Pre-sale only</td>
+                <td style="background: #fff3cd;">~ Daily sync</td>
+            </tr>
+            <tr>
+                <td><strong>Actual post-sale profit</strong></td>
+                <td style="background: #d4edda; font-weight: bold;">✓ From API</td>
+                <td style="background: #f8d7da;">✗ Estimates only</td>
+                <td style="background: #fff3cd;">~ CSV required</td>
+            </tr>
+            <tr>
+                <td><strong>Proactive loss prevention</strong></td>
+                <td style="background: #d4edda; font-weight: bold;">✓ Smart alerts</td>
+                <td style="background: #f8d7da;">✗ No alerts</td>
+                <td style="background: #f8d7da;">✗ Historical only</td>
+            </tr>
+            <tr>
+                <td><strong>Price optimization</strong></td>
+                <td style="background: #d4edda; font-weight: bold;">✓ AI-powered</td>
+                <td style="background: #f8d7da;">✗ None</td>
+                <td style="background: #f8d7da;">✗ Basic</td>
+            </tr>
+            <tr>
+                <td><strong>Competitor tracking</strong></td>
+                <td style="background: #d4edda; font-weight: bold;">✓ Automated</td>
+                <td style="background: #f8d7da;">✗ None</td>
+                <td style="background: #f8d7da;">✗ None</td>
+            </tr>
+            <tr>
+                <td><strong>Zero manual work</strong></td>
+                <td style="background: #d4edda; font-weight: bold;">✓ 100% automated</td>
+                <td style="background: #f8d7da;">✗ Manual calcs</td>
+                <td style="background: #fff3cd;">~ CSV imports</td>
+            </tr>
+        </table>
+        
+        <h2>10.3 Critical Success Factors</h2>
+        
+        <div class="highlight-box">
+            <h3>What Must Go Right for This to Succeed</h3>
+            
+            <ol>
+                <li><strong>The "Aha" Moment Must Happen Fast</strong>
+                    <p>Within 60 seconds of connecting their Takealot account, sellers must discover something valuable (hidden loss, optimization opportunity). If onboarding takes >5 minutes or doesn't show clear value, we lose them.</p>
+                </li>
+                
+                <li><strong>Accuracy is Non-Negotiable</strong>
+                    <p>If our fee calculations are off by even 5%, sellers will lose trust immediately. We must match Takealot's actual fees exactly, with daily reconciliation.</p>
+                </li>
+                
+                <li><strong>Real-Time Updates Create Addiction</strong>
+                    <p>The dopamine hit of seeing "New sale: +R45 profit" in real-time creates a checking habit. Webhooks are critical, not optional.</p>
+                </li>
+                
+                <li><strong>ROI Must Be Obvious and Quantified</strong>
+                    <p>Don't say "helpful insights" - say "You avoided R850 in losses this month by not restocking these 3 products." Concrete numbers drive conversions.</p>
+                </li>
+                
+                <li><strong>Speed to Market Wins</strong>
+                    <p>First-mover advantage in this space is massive. Launch MVP in 6 weeks, iterate from real user feedback. Don't wait for perfection.</p>
+                </li>
+            </ol>
+        </div>
+        
+        <h2>10.4 Questions to Answer Before Launch</h2>
+        
+        <div class="ui-mockup">
+            <h4>Pre-Launch Validation Checklist</h4>
+            
+            <table>
+                <tr>
+                    <th>Question</th>
+                    <th>How to Answer</th>
+                    <th>Decision Impact</th>
+                </tr>
+                <tr>
+                    <td>Will sellers actually pay R699/month for this?</td>
+                    <td>Interview 20 sellers, show mockups, ask for pre-orders</td>
+                    <td>Pricing validation - might start at R499 instead</td>
+                </tr>
+                <tr>
+                    <td>Is the Takealot API stable enough?</td>
+                    <td>Build POC, test for 2 weeks, measure uptime/errors</td>
+                    <td>If unreliable, need CSV backup from day 1</td>
+                </tr>
+                <tr>
+                    <td>How accurate can we make fee calculations?</td>
+                    <td>Calculate fees for 100 past orders, compare to actuals</td>
+                    <td>If <95% accurate, we have a problem</td>
+                </tr>
+                <tr>
+                    <td>What's the biggest pain point: loss prevention or price optimization?</td>
+                    <td>Survey 50 sellers</td>
+                    <td>Determines feature priority in MVP</td>
+                </tr>
+                <tr>
+                    <td>Will web scraping for competitor prices work long-term?</td>
+                    <td>Test scraper for 1 month, track block rate</td>
+                    <td>If blocked >10%, need different approach</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- CONCLUSION -->
+    <div class="section">
+        <h1>Conclusion</h1>
+        
+        <div class="success-box">
+            <h2 style="margin-top: 0;">The Opportunity is Clear</h2>
+            
+            <p style="font-size: 12pt; margin-bottom: 15pt;">
+                Takealot sellers are operating in the dark, discovering losses too late, and spending hours on manual profitability analysis. There is currently <strong>no real-time, automated profit intelligence tool</strong> in the South African e-commerce market.
+            </p>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15pt; margin: 20pt 0;">
+                <div style="text-align: center; padding: 15pt; background: white; border-radius: 8px; border: 2px solid #667eea;">
+                    <div style="font-size: 32pt; font-weight: bold; color: #667eea;">15,000+</div>
+                    <div style="font-size: 10pt; color: #666; margin-top: 5pt;">Potential Customers</div>
+                </div>
+                <div style="text-align: center; padding: 15pt; background: white; border-radius: 8px; border: 2px solid #28a745;">
+                    <div style="font-size: 32pt; font-weight: bold; color: #28a745;">R1.8M</div>
+                    <div style="font-size: 10pt; color: #666; margin-top: 5pt;">Year 1 ARR Target</div>
+                </div>
+                <div style="text-align: center; padding: 15pt; background: white; border-radius: 8px; border: 2px solid #ff9800;">
+                    <div style="font-size: 32pt; font-weight: bold; color: #ff9800;">60:1</div>
+                    <div style="font-size: 10pt; color: #666; margin-top: 5pt;">LTV:CAC Ratio</div>
+                </div>
+            </div>
+        </div>
+        
+        <h2>What Makes This Irresistible</h2>
+        
+        <p>This isn't just another dashboard or analytics tool. It's a <strong>profit protection system</strong> that:</p>
+        
+        <ul>
+            <li>✅ Shows sellers losses they didn't know existed (instant value)</li>
+            <li>✅ Prevents future losses before they happen (proactive alerts)</li>
+            <li>✅ Requires zero manual work (fully automated)</li>
+            <li>✅ Pays for itself in the first week (clear ROI)</li>
+            <li>✅ Creates a daily checking habit (real-time dopamine hits)</li>
+        </ul>
+        
+        <div class="highlight-box">
+            <h3>The Single Most Irresistible Moment</h3>
+            <p style="font-size: 13pt; font-weight: bold; color: #667eea; margin-bottom: 10pt;">
+                "You've been losing R30.88 on every Wireless Mouse sale. You've sold 47 this month = R1,451 in losses you didn't know about. If you restock this product next month, you'll lose another R1,450."
+            </p>
+            <p>
+                That moment—when a seller sees a concrete, quantified loss they were about to repeat—creates a customer for life. It's not about the features. It's about that gut-punch realization followed by relief that they found out before it got worse.
+            </p>
+        </div>
+        
+        <h2>Next Steps</h2>
+        
+        <div class="ui-mockup">
+            <h4>Immediate Action Plan (Next 30 Days)</h4>
+            
+            <table>
+                <tr>
+                    <th>Week</th>
+                    <th>Action</th>
+                    <th>Owner</th>
+                </tr>
+                <tr>
+                    <td><strong>Week 1</strong></td>
+                    <td>
+                        • Finalize technical stack decision<br>
+                        • Set up development environment<br>
+                        • Register Takealot Developer account<br>
+                        • Interview 10 sellers for validation
+                    </td>
+                    <td>Founder + Tech Lead</td>
+                </tr>
+                <tr>
+                    <td><strong>Week 2</strong></td>
+                    <td>
+                        • Build OAuth integration POC<br>
+                        • Fetch first order data from API<br>
+                        • Test fee calculation accuracy (100 orders)<br>
+                        • Create landing page for beta signups
+                    </td>
+                    <td>Tech Lead</td>
+                </tr>
+                <tr>
+                    <td><strong>Week 3</strong></td>
+                    <td>
+                        • Complete core profitability engine<br>
+                        • Build basic dashboard UI<br>
+                        • Set up database schema<br>
+                        • Recruit 10 beta testers
+                    </td>
+                    <td>Full Team</td>
+                </tr>
+                <tr>
+                    <td><strong>Week 4</strong></td>
+                    <td>
+                        • Beta launch to 10 sellers<br>
+                        • Collect feedback daily<br>
+                        • Fix critical bugs<br>
+                        • Iterate based on user pain points<br>
+                        • Prepare for public launch
+                    </td>
+                    <td>Full Team</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="success-box" style="margin-top: 30pt;">
+            <h2 style="margin-top: 0;">Final Thought</h2>
+            <p style="font-size: 13pt; font-style: italic;">
+                "The best product is the one that prevents a problem the user didn't know they had."
+            </p>
+            <p style="margin-top: 15pt;">
+                Takealot sellers don't wake up thinking "I need a profitability dashboard." They wake up thinking "I wish I was making more money" or "Why are my margins so thin?"
+            </p>
+            <p>
+                Our dashboard doesn't sell features. It sells the answer: "Here's exactly why your margins are thin, and here's how to fix it."
+            </p>
+            <p style="font-size: 14pt; font-weight: bold; color: #667eea; margin-top: 20pt; text-align: center;">
+                Build for that moment. Everything else is just details.
+            </p>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div style="margin-top: 50pt; padding-top: 20pt; border-top: 2px solid #667eea; text-align: center; color: #666; font-size: 10pt;">
+        <p><strong>Takealot Seller Profitability Dashboard</strong></p>
+        <p>Strategic Business & Technical Plan | Version 1.0 | January 2026</p>
+        <p style="margin-top: 10pt;">This document is confidential and proprietary.</p>
+    </div>
+</body>
+</html>

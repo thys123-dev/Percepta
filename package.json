@@ -1,0 +1,28 @@
+{
+  "name": "percepta",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Takealot Seller Profitability Dashboard",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w packages/api",
+    "dev:web": "npm run dev -w packages/web",
+    "build:api": "npm run build -w packages/api",
+    "build:web": "npm run build -w packages/web",
+    "build:shared": "npm run build -w packages/shared",
+    "build": "npm run build:shared && npm run build:api && npm run build:web",
+    "lint": "eslint packages/*/src --ext .ts,.tsx",
+    "lint:fix": "eslint packages/*/src --ext .ts,.tsx --fix",
+    "format": "prettier --write \"packages/*/src/**/*.{ts,tsx,json,css}\"",
+    "format:check": "prettier --check \"packages/*/src/**/*.{ts,tsx,json,css}\"",
+    "typecheck": "tsc --noEmit -p packages/api/tsconfig.json && tsc --noEmit -p packages/web/tsconfig.json",
+    "test": "npm run test -w packages/api",
+    "db:migrate": "npm run db:migrate -w packages/api",
+    "db:migrate:create": "npm run db:migrate:create -w packages/api"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
