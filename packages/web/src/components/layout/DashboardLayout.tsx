@@ -10,11 +10,11 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useRealtimeUpdates } from '../../hooks/useRealtimeUpdates.js';
+import { AlertBell } from '../alerts/AlertBell.js';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  // Future: { path: '/dashboard/products', label: 'Products', icon: Package },
-  // Future: { path: '/dashboard/alerts', label: 'Alerts', icon: Bell },
+  { path: '/dashboard/alerts', label: 'Alerts', icon: Bell },
   // Future: { path: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -103,9 +103,7 @@ export function DashboardLayout() {
                 Offline
               </div>
             )}
-            <button className="relative rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700">
-              <Bell className="h-5 w-5" />
-            </button>
+            <AlertBell />
             <button className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700">
               <Settings className="h-5 w-5" />
             </button>

@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { AlertsPage } from './pages/AlertsPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 
@@ -16,7 +17,8 @@ function App() {
       {/* Dashboard routes (protected) */}
       <Route path="/dashboard" element={<DashboardLayout />}>
         <Route index element={<DashboardPage />} />
-        {/* Future routes: /dashboard/products/:id, /dashboard/alerts, /dashboard/settings */}
+        <Route path="alerts" element={<AlertsPage />} />
+        {/* Future routes: /dashboard/products/:id, /dashboard/settings */}
       </Route>
 
       {/* Redirect root to dashboard */}

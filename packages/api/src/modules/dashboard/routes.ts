@@ -371,4 +371,58 @@ export async function dashboardRoutes(server: FastifyInstance) {
       };
     }
   );
+
+  // ---------------------------------------------------------------------------
+  // GET /api/dashboard/fee-summary — Portfolio fee breakdown by type
+  // ---------------------------------------------------------------------------
+  server.get('/fee-summary', { preHandler: [authenticate] }, async (request) => {
+    const { sellerId } = request.user as { sellerId: string };
+    const { period, startDate, endDate } = periodQuerySchema.parse(request.query);
+    const { start, end } = getPeriodDates(period, startDate, endDate);
+
+    const [totals] = await db
+      .select({
+        totalRevenue:       sql<string>`COALESCE(SUM(${schema.profitCalculations.revenueCents}), 0)`,
+        totalSuccessFees:   sql<string>`COALESCE(SUM(${schema.calculatedFees.successFeeCents}), 0)`,
+        totalFulfilmentFees: sql<string>`COALESCE(SUM(${schema.calculatedFees.fulfilmentFeeCents}), 0)`,
+        totalIbtPenalties:  sql<string>`COALESCE(SUM(${schema.calculatedFees.ibtPenaltyCents}), 0)`,
+        totalStorageFees:   sql<string>`COALESCE(SUM(${schema.calculatedFees.storageFeeAllocatedCents}), 0)`,
+        totalFees:          sql<string>`COALESCE(SUM(${schema.calculatedFees.totalFeeCents}), 0)`,
+      })
+      .from(schema.profitCalculations)
+      .innerJoin(schema.orders, eq(schema.profitCalculations.orderId, schema.orders.id))
+      .innerJoin(schema.calculatedFees, eq(schema.calculatedFees.orderId, schema.orders.id))
+      .where(
+        and(
+          eq(schema.profitCalculations.sellerId, sellerId),
+          gte(schema.orders.orderDate, start),
+          lte(schema.orders.orderDate, end),
+          notInArray(schema.orders.saleStatus, EXCLUDED_STATUSES)
+        )
+      );
+
+    const totalRevenue = Number(totals?.totalRevenue ?? 0);
+    const pctOf = (cents: number) =>
+      totalRevenue > 0 ? Math.round((cents / totalRevenue) * 10000) / 100 : 0;
+
+    const feeBreakdown = [
+      { feeType: 'success_fee', label: 'Success Fees',    totalCents: Number(totals?.totalSuccessFees ?? 0) },
+      { feeType: 'fulfilment',  label: 'Fulfilment Fees', totalCents: Number(totals?.totalFulfilmentFees ?? 0) },
+      { feeType: 'ibt_penalty', label: 'IBT Penalties',   totalCents: Number(totals?.totalIbtPenalties ?? 0) },
+      { feeType: 'storage',     label: 'Storage Fees',    totalCents: Number(totals?.totalStorageFees ?? 0) },
+    ].map((item) => ({
+      ...item,
+      pctOfRevenue: pctOf(item.totalCents),
+    }));
+
+    const totalFees = Number(totals?.totalFees ?? 0);
+
+    return {
+      period: { startDate: start.toISOString(), endDate: end.toISOString() },
+      totalRevenueCents: totalRevenue,
+      feeBreakdown,
+      totalFeesCents: totalFees,
+      totalFeesPctOfRevenue: pctOf(totalFees),
+    };
+  });
 }

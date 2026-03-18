@@ -15,6 +15,7 @@ import { useState } from 'react';
 import { ProfitScorecard } from '../components/dashboard/ProfitScorecard.js';
 import { ProductTable } from '../components/dashboard/ProductTable.js';
 import { PeriodSelector } from '../components/dashboard/PeriodSelector.js';
+import { FeeSummary } from '../components/dashboard/FeeSummary.js';
 import type { Period, PeriodParams } from '../hooks/useDashboard.js';
 
 export function DashboardPage() {
@@ -53,18 +54,31 @@ export function DashboardPage() {
       {/* Profitability Scorecard — 4 KPI cards */}
       <ProfitScorecard periodParams={periodParams} />
 
-      {/* Product Performance Table */}
-      <section>
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Product Performance</h2>
-          <p className="mt-0.5 text-sm text-gray-500">
-            Default sort: lowest margin first — loss-makers surface at the top.
-            Click any row to see a full fee waterfall breakdown.
-          </p>
-        </div>
+      {/* Fee Breakdown + Product Table — side by side on wide screens */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        {/* Product Performance Table (takes 2/3 width) */}
+        <section className="xl:col-span-2">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Product Performance</h2>
+            <p className="mt-0.5 text-sm text-gray-500">
+              Default sort: lowest margin first — loss-makers surface at the top.
+              Click any row to see a full fee waterfall breakdown.
+            </p>
+          </div>
+          <ProductTable periodParams={periodParams} />
+        </section>
 
-        <ProductTable periodParams={periodParams} />
-      </section>
+        {/* Portfolio Fee Summary (takes 1/3 width) */}
+        <section className="xl:col-span-1">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Where Your Money Goes</h2>
+            <p className="mt-0.5 text-sm text-gray-500">
+              Fee breakdown as a percentage of total revenue
+            </p>
+          </div>
+          <FeeSummary periodParams={periodParams} />
+        </section>
+      </div>
     </div>
   );
 }

@@ -19,6 +19,10 @@ import {
 } from './fee-calculator.js';
 import { DEFAULT_COGS_ESTIMATE_PCT } from '@percepta/shared';
 import type { CalculateProfitsJobData } from '../sync/queues.js';
+import {
+  checkLossMakerAlert,
+  checkMarginDropAlert,
+} from '../alerts/alert-generator.js';
 
 export async function processCalculateProfits(
   job: Job<CalculateProfitsJobData>
@@ -181,6 +185,46 @@ export async function processCalculateProfits(
 
         calculated++;
         if (!profitResult.isProfitable) lossMakers++;
+
+        // ── Alert checks (fire-and-forget, don't block batch) ──
+        const productTitle = order.saleStatus ?? 'Unknown Product';
+        // Resolve product title from offer if available
+        const alertTitle =
+          (order.offerIdNum
+            ? (await db
+                .select({ title: schema.offers.title })
+                .from(schema.offers)
+                .where(
+                  and(
+                    eq(schema.offers.sellerId, sellerId),
+                    eq(schema.offers.offerId, order.offerIdNum)
+                  )
+                )
+                .limit(1)
+                .then((r) => r[0]?.title)
+              )
+            : null) ?? 'Unknown Product';
+
+        // Loss-maker alert
+        checkLossMakerAlert({
+          sellerId,
+          offerId: order.offerIdNum,
+          productTitle: alertTitle,
+          netProfitCents: profitResult.netProfitCents,
+          marginPct: profitResult.profitMarginPct,
+        }).catch((err: Error) =>
+          console.error(`[alert] loss_maker check failed: ${err.message}`)
+        );
+
+        // Margin drop alert
+        checkMarginDropAlert({
+          sellerId,
+          offerId: order.offerIdNum,
+          productTitle: alertTitle,
+          currentMarginPct: profitResult.profitMarginPct,
+        }).catch((err: Error) =>
+          console.error(`[alert] margin_drop check failed: ${err.message}`)
+        );
       } catch (err) {
         console.error(
           `[calculate-profits] Error processing order ${order.orderId}:`,

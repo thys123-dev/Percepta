@@ -148,3 +148,32 @@ export function useProductFees(offerId: number | null) {
     staleTime: 60_000, // fee structure rarely changes mid-session
   });
 }
+
+// =============================================================================
+// Portfolio Fee Summary
+// =============================================================================
+
+export interface FeeBreakdownItem {
+  feeType: string;
+  label: string;
+  totalCents: number;
+  pctOfRevenue: number;
+}
+
+export interface FeeSummaryData {
+  period: { startDate: string; endDate: string };
+  totalRevenueCents: number;
+  feeBreakdown: FeeBreakdownItem[];
+  totalFeesCents: number;
+  totalFeesPctOfRevenue: number;
+}
+
+export function useFeeSummary(params: PeriodParams) {
+  return useQuery<FeeSummaryData>({
+    queryKey: ['fee-summary', params],
+    queryFn: () =>
+      api
+        .get<FeeSummaryData>('/dashboard/fee-summary', { params })
+        .then((r) => r.data),
+  });
+}

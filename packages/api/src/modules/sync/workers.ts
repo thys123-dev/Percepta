@@ -27,6 +27,7 @@ import { processSyncSales } from './jobs/sync-sales.js';
 import { processDailySync } from './jobs/daily-sync.js';
 import { processCalculateProfits } from '../fees/profit-processor.js';
 import { processWebhook } from '../webhooks/processor.js';
+import { checkStorageWarnings } from '../alerts/alert-generator.js';
 
 const CONCURRENCY = 2; // Be gentle on Takealot API
 
@@ -139,6 +140,19 @@ export function startWorkers() {
     console.info(
       `[daily-sync] ✓ Seller ${job.data.sellerId}: refreshed ${result.offersCount} offers, ${result.ordersCount} orders`
     );
+
+    // Check for storage warning alerts after offers are refreshed
+    if (job.data.sellerId !== '__all__') {
+      checkStorageWarnings(job.data.sellerId)
+        .then((count) => {
+          if (count > 0) {
+            console.info(`[daily-sync] Created ${count} storage warnings for seller ${job.data.sellerId}`);
+          }
+        })
+        .catch((err: Error) => {
+          console.error(`[daily-sync] Storage warning check failed: ${err.message}`);
+        });
+    }
   });
 
   dailySyncWorker.on('failed', (job, err) => {
