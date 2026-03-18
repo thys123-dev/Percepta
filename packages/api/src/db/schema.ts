@@ -328,6 +328,8 @@ export const feeDiscrepancies = pgTable(
     discrepancyCents: integer('discrepancy_cents').notNull(), // actual - calculated
     discrepancyPct: decimal('discrepancy_pct', { precision: 7, scale: 2 }), // (actual-calc)/actual × 100
     status: varchar('status', { length: 20 }).default('open'), // open | acknowledged | disputed
+    resolvedNote: text('resolved_note'), // seller's note when acknowledging/disputing
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }), // when status was changed
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   },
   (table) => [

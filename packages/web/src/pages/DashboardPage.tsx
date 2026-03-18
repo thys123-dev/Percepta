@@ -16,6 +16,7 @@ import { ProfitScorecard } from '../components/dashboard/ProfitScorecard.js';
 import { ProductTable } from '../components/dashboard/ProductTable.js';
 import { PeriodSelector } from '../components/dashboard/PeriodSelector.js';
 import { FeeSummary } from '../components/dashboard/FeeSummary.js';
+import { FeeAuditSummaryCard } from '../components/dashboard/FeeAuditSummaryCard.js';
 import type { Period, PeriodParams } from '../hooks/useDashboard.js';
 
 export function DashboardPage() {
@@ -53,6 +54,9 @@ export function DashboardPage() {
 
       {/* Profitability Scorecard — 4 KPI cards */}
       <ProfitScorecard periodParams={periodParams} />
+
+      {/* Fee Audit Summary — shows overcharge alerts or all-clear */}
+      <FeeAuditSummaryCard />
 
       {/* Fee Breakdown + Product Table — side by side on wide screens */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">

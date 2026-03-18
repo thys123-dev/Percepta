@@ -189,6 +189,44 @@ export async function checkMarginDropAlert(params: {
  * (3-day advance warning before Takealot's 35-day storage fee threshold).
  * Returns the number of alerts created.
  */
+// =============================================================================
+// Fee Overcharge Alert (fired after CSV import)
+// =============================================================================
+
+/**
+ * Called after a CSV import commit. Fires an alert if:
+ *   - Total overcharged amount exceeds R50 (5000 cents), OR
+ *   - More than 5 fee discrepancies were detected
+ */
+export async function checkFeeDiscrepancyAlert(params: {
+  sellerId: string;
+  overchargedCents: number;
+  discrepancyCount: number;
+  importId: string;
+}): Promise<void> {
+  const { sellerId, overchargedCents, discrepancyCount, importId } = params;
+
+  // Only fire if meaningful overcharges
+  if (overchargedCents < 5000 && discrepancyCount <= 5) return;
+
+  const amount = (overchargedCents / 100).toFixed(2);
+  const severity = overchargedCents >= 20000 ? 'critical' : 'warning';
+
+  await insertAlert({
+    sellerId,
+    alertType: 'fee_overcharge',
+    severity,
+    title: `Fee Overcharges Detected`,
+    message: `Your latest sales report import found ${discrepancyCount} fee discrepancies totaling R${amount} in potential overcharges. Review and dispute these on the Fee Audit page.`,
+    offerId: null,
+    actionUrl: '/dashboard/fee-audit',
+  });
+}
+
+// =============================================================================
+// Storage Warning Alert (batch — called by daily sync)
+// =============================================================================
+
 export async function checkStorageWarnings(sellerId: string): Promise<number> {
   const ADVANCE_WARNING_DAYS = 32;
 
