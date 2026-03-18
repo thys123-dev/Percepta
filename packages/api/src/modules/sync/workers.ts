@@ -8,24 +8,27 @@
  * In production (Phase 2+), split into a separate worker process.
  */
 
-import { Worker, Queue } from 'bullmq';
+import { Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
 import { redisConnection } from './redis.js';
+import { publishProfitUpdate } from './redis.js';
 import {
   initialSyncQueue,
   syncOffersQueue,
   syncSalesQueue,
   calculateProfitsQueue,
   dailySyncQueue,
+  processWebhookQueue,
 } from './queues.js';
 import { processInitialSync } from './jobs/initial-sync.js';
 import { processSyncOffers } from './jobs/sync-offers.js';
 import { processSyncSales } from './jobs/sync-sales.js';
 import { processDailySync } from './jobs/daily-sync.js';
 import { processCalculateProfits } from '../fees/profit-processor.js';
+import { processWebhook } from '../webhooks/processor.js';
 
-const CONCURRENCY = 2; // Process up to 2 sync jobs at once (be gentle on Takealot API)
+const CONCURRENCY = 2; // Be gentle on Takealot API
 
 export function startWorkers() {
   // ---- initial-sync worker ----
@@ -98,6 +101,24 @@ export function startWorkers() {
     console.info(
       `[calculate-profits] ✓ Seller ${job.data.sellerId}: ${result.calculated} orders, ${result.lossMakers} loss-makers`
     );
+
+    // Push real-time profit update to seller's dashboard via Redis pub/sub → Socket.io
+    // Determine the trigger source based on job name
+    const triggeredBy =
+      job.name === 'calculate-from-webhook'
+        ? 'webhook'
+        : job.name === 'recalculate-after-cogs'
+        ? 'cogs-update'
+        : 'daily-sync';
+
+    publishProfitUpdate({
+      sellerId: job.data.sellerId,
+      calculated: result.calculated,
+      lossMakers: result.lossMakers,
+      triggeredBy,
+    }).catch((err: Error) => {
+      console.error(`[calculate-profits] Failed to publish profit update: ${err.message}`);
+    });
   });
 
   calculateProfitsWorker.on('failed', (job, err) => {
@@ -124,25 +145,50 @@ export function startWorkers() {
     console.error(`[daily-sync] ✗ Seller ${job?.data.sellerId}: ${err.message}`);
   });
 
+  // ---- process-webhook worker (Week 4) ----
+  // Higher concurrency than sync workers — webhook processing is fast
+  const processWebhookWorker = new Worker(
+    'process-webhook',
+    processWebhook,
+    {
+      connection: redisConnection.duplicate(),
+      concurrency: 10,
+    }
+  );
+
+  processWebhookWorker.on('completed', (job, result) => {
+    console.info(
+      `[process-webhook] ✓ Seller ${job.data.sellerId}: "${job.data.eventType}" → ${result.action}`
+    );
+  });
+
+  processWebhookWorker.on('failed', (job, err) => {
+    console.error(
+      `[process-webhook] ✗ Seller ${job?.data.sellerId} "${job?.data.eventType}": ${err.message}`
+    );
+  });
+
   // ---- Schedule nightly daily-sync for all sellers (02:00 AM) ----
   scheduleDailySync();
 
-  console.info('✅ BullMQ workers started');
+  console.info('✅ BullMQ workers started (initial-sync, sync-offers, sync-sales, calculate-profits, daily-sync, process-webhook)');
 
   // Graceful shutdown
   async function shutdown() {
-    console.info('[Workers] Shutting down...');
+    console.info('[Workers] Shutting down gracefully...');
     await Promise.all([
       initialSyncWorker.close(),
       syncOffersWorker.close(),
       syncSalesWorker.close(),
       calculateProfitsWorker.close(),
       dailySyncWorker.close(),
+      processWebhookWorker.close(),
     ]);
+    console.info('[Workers] All workers shut down');
   }
 
-  process.on('SIGTERM', shutdown);
-  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', () => { void shutdown(); });
+  process.on('SIGINT', () => { void shutdown(); });
 
   return {
     initialSyncWorker,
@@ -150,6 +196,7 @@ export function startWorkers() {
     syncSalesWorker,
     calculateProfitsWorker,
     dailySyncWorker,
+    processWebhookWorker,
   };
 }
 
@@ -165,12 +212,11 @@ async function scheduleDailySync() {
   }
 
   // Schedule a dispatcher job that fans out to all sellers at 02:00 AM daily
-  // The dispatcher job uses a special sellerId='__all__' to indicate fan-out
   await dailySyncQueue.add(
     'nightly-dispatcher',
     { sellerId: '__all__' },
     {
-      repeat: { cron: '0 2 * * *' }, // 2:00 AM every day
+      repeat: { pattern: '0 2 * * *' }, // 2:00 AM every day
       jobId: 'nightly-dispatcher',
     }
   );

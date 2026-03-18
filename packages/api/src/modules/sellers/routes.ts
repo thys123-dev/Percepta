@@ -1,11 +1,13 @@
+import { randomBytes } from 'crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db, schema } from '../../db/index.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { authenticate } from '../../middleware/auth.js';
 import { TakealotClient } from '../takealot-client/index.js';
 import { encrypt } from '../../config/encryption.js';
 import { initialSyncQueue, calculateProfitsQueue } from '../sync/queues.js';
+import { env } from '../../config/env.js';
 
 const connectApiKeySchema = z.object({
   apiKey: z.string().min(10),
@@ -44,12 +46,34 @@ export async function sellerRoutes(server: FastifyInstance) {
     return seller;
   });
 
-  // POST /api/sellers/connect — Test and store Takealot API key, then kick off initial sync
+  // GET /api/sellers/webhook-info — Webhook URL + secret for Takealot portal setup
+  server.get('/webhook-info', { preHandler: [authenticate] }, async (request) => {
+    const { sellerId } = request.user as { sellerId: string };
+
+    const [seller] = await db
+      .select({ id: schema.sellers.id, webhookSecret: schema.sellers.webhookSecret })
+      .from(schema.sellers)
+      .where(eq(schema.sellers.id, sellerId))
+      .limit(1);
+
+    if (!seller) return { webhookUrl: null, webhookSecret: null };
+
+    // Construct the seller-specific webhook URL
+    const apiBase = env.API_BASE_URL;
+    const webhookUrl = `${apiBase}/api/webhooks/takealot/${seller.id}`;
+
+    return {
+      webhookUrl,
+      webhookSecret: seller.webhookSecret ?? null,
+    };
+  });
+
+  // POST /api/sellers/connect — Validate and store Takealot API key, kick off initial sync
   server.post('/connect', { preHandler: [authenticate] }, async (request, reply) => {
     const { sellerId } = request.user as { sellerId: string };
     const { apiKey } = connectApiKeySchema.parse(request.body);
 
-    // Test the API key against the real Takealot API
+    // Test the API key against Takealot API
     const client = new TakealotClient(apiKey);
     const isValid = await client.testConnection();
 
@@ -61,20 +85,24 @@ export async function sellerRoutes(server: FastifyInstance) {
       });
     }
 
-    // Encrypt and store the API key at rest
+    // Encrypt the API key at rest (AES-256-GCM)
     const encryptedKey = encrypt(apiKey);
+
+    // Generate a 64-char hex webhook secret for HMAC signing
+    const webhookSecret = randomBytes(32).toString('hex');
 
     await db
       .update(schema.sellers)
       .set({
         apiKeyEnc: encryptedKey,
         apiKeyValid: true,
+        webhookSecret,
         initialSyncStatus: 'pending',
         updatedAt: new Date(),
       })
       .where(eq(schema.sellers.id, sellerId));
 
-    // Queue the initial sync — use jobId to prevent duplicate queuing
+    // Queue initial sync (deduped by jobId)
     await initialSyncQueue.add(
       'initial-sync',
       { sellerId },
@@ -114,7 +142,7 @@ export async function sellerRoutes(server: FastifyInstance) {
       if (updated) updatedOfferIds.push(updated.offerId);
     }
 
-    // Fetch internal order IDs for affected offers so we can recalculate profit
+    // Recalculate profit for all orders belonging to the updated offers
     if (updatedOfferIds.length > 0) {
       const affectedOrders = await db
         .select({ id: schema.orders.id })
@@ -122,12 +150,10 @@ export async function sellerRoutes(server: FastifyInstance) {
         .where(
           and(
             eq(schema.orders.sellerId, sellerId),
-            // Filter to orders for the updated offers
-            // Note: using a simple in-memory filter since drizzle doesn't support `IN` on arrays easily here
+            inArray(schema.orders.offerId, updatedOfferIds)
           )
         );
 
-      // Queue profit recalculation for all affected orders (implemented Week 3)
       const orderIds = affectedOrders.map((o) => o.id);
       if (orderIds.length > 0) {
         await calculateProfitsQueue.add('recalculate-after-cogs', {

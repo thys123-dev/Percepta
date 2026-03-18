@@ -5,11 +5,12 @@
  * Workers are defined in workers.ts.
  *
  * Queue architecture:
- *  - initial-sync     → Full 180-day historical sync for a new seller
- *  - sync-offers      → Fetch + upsert all offers for a seller
- *  - sync-sales       → Fetch + upsert sales for a date range
+ *  - initial-sync      → Full 180-day historical sync for a new seller
+ *  - sync-offers       → Fetch + upsert all offers for a seller
+ *  - sync-sales        → Fetch + upsert sales for a date range
  *  - calculate-profits → Calculate profit per order (implemented Week 3)
- *  - daily-sync       → Nightly scheduled reconciliation for all sellers
+ *  - daily-sync        → Nightly scheduled reconciliation for all sellers
+ *  - process-webhook   → Handle incoming Takealot webhook events (Week 4)
  */
 
 import { Queue } from 'bullmq';
@@ -40,6 +41,13 @@ export interface CalculateProfitsJobData {
 
 export interface DailySyncJobData {
   sellerId: string;
+}
+
+export interface ProcessWebhookJobData {
+  sellerId: string;
+  eventType: string;
+  payload: Record<string, unknown>;
+  deliveryId?: string;
 }
 
 // ---- Queue Instances ----
@@ -91,5 +99,16 @@ export const dailySyncQueue = new Queue<DailySyncJobData>('daily-sync', {
     backoff: { type: 'exponential', delay: 10000 },
     removeOnComplete: { count: 30 },
     removeOnFail: { count: 50 },
+  },
+});
+
+// Webhook event processing queue — high priority, low latency
+export const processWebhookQueue = new Queue<ProcessWebhookJobData>('process-webhook', {
+  connection: redisConnection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 1000 },
+    removeOnComplete: { count: 500 }, // Keep more for audit trail
+    removeOnFail: { count: 200 },
   },
 });

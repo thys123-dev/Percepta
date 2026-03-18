@@ -23,6 +23,7 @@ export const sellers = pgTable('sellers', {
   businessName: varchar('business_name', { length: 255 }),
   apiKeyEnc: varchar('api_key_enc', { length: 512 }),
   apiKeyValid: boolean('api_key_valid').default(true),
+  webhookSecret: varchar('webhook_secret', { length: 64 }), // HMAC-SHA256 signing secret for Takealot webhooks
   isVatVendor: boolean('is_vat_vendor').default(false),
   vatNumber: varchar('vat_number', { length: 20 }),
   targetMarginPct: decimal('target_margin_pct', { precision: 5, scale: 2 }).default('25.00'),
