@@ -2,6 +2,7 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Bell,
+  PackageCheck,
   Settings,
   LogOut,
   TrendingUp,
@@ -15,6 +16,7 @@ import { AlertBell } from '../alerts/AlertBell.js';
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/dashboard/alerts', label: 'Alerts', icon: Bell },
+  { path: '/dashboard/cogs', label: 'COGS', icon: PackageCheck },
   // Future: { path: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 

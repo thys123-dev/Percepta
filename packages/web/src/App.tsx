@@ -3,6 +3,7 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { AlertsPage } from './pages/AlertsPage';
+import { CogsPage } from './pages/CogsPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 
@@ -18,6 +19,7 @@ function App() {
       <Route path="/dashboard" element={<DashboardLayout />}>
         <Route index element={<DashboardPage />} />
         <Route path="alerts" element={<AlertsPage />} />
+        <Route path="cogs" element={<CogsPage />} />
         {/* Future routes: /dashboard/products/:id, /dashboard/settings */}
       </Route>
 
