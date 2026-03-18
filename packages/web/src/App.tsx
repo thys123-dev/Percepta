@@ -4,6 +4,7 @@ import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { AlertsPage } from './pages/AlertsPage';
 import { CogsPage } from './pages/CogsPage';
+import { FeeAuditPage } from './pages/FeeAuditPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 
@@ -20,6 +21,7 @@ function App() {
         <Route index element={<DashboardPage />} />
         <Route path="alerts" element={<AlertsPage />} />
         <Route path="cogs" element={<CogsPage />} />
+        <Route path="fee-audit" element={<FeeAuditPage />} />
         {/* Future routes: /dashboard/products/:id, /dashboard/settings */}
       </Route>
 

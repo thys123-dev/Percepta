@@ -8,6 +8,7 @@ import { webhookRoutes } from './modules/webhooks/routes.js';
 import { dashboardRoutes } from './modules/dashboard/routes.js';
 import { alertRoutes } from './modules/alerts/routes.js';
 import { syncRoutes } from './modules/sync/routes.js';
+import { salesReportRoutes } from './modules/fees/sales-report-routes.js';
 import { startWorkers } from './modules/sync/workers.js';
 import { setupSocketIO } from './modules/realtime/socket.js';
 
@@ -46,6 +47,7 @@ export async function buildServer() {
   await server.register(webhookRoutes, { prefix: '/api/webhooks' });
   await server.register(dashboardRoutes, { prefix: '/api/dashboard' });
   await server.register(alertRoutes, { prefix: '/api/alerts' });
+  await server.register(salesReportRoutes, { prefix: '/api/sales-report' });
 
   return server;
 }

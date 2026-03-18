@@ -131,6 +131,8 @@ async function upsertSalesBatch(
       customerDc: sale.customer_dc ?? null,
       isIbt,
       promotion: sale.promotion || null,
+      shipmentName: sale.shipment_name || null,
+      poNumber: sale.po_number ? String(sale.po_number) : null,
       source: 'api' as const,
       updatedAt: new Date(),
     };
@@ -148,6 +150,8 @@ async function upsertSalesBatch(
         fulfillmentDc: sql`excluded.fulfillment_dc`,
         customerDc: sql`excluded.customer_dc`,
         isIbt: sql`excluded.is_ibt`,
+        shipmentName: sql`excluded.shipment_name`,
+        poNumber: sql`excluded.po_number`,
         updatedAt: sql`excluded.updated_at`,
       },
     })

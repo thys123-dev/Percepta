@@ -125,9 +125,10 @@ async function upsertOffersBatch(sellerId: string, offers: TakealotOffer[]): Pro
         : null;
     const weightTier = weightGrams ? classifyWeightTier(weightGrams) : null;
 
-    // Stock by DC
+    // Stock by DC (CPT, JHB, DBN — matches bulk replenishment template)
     const stockJhb = offer.stock_at_takealot?.find((s) => s.dc === 'JHB')?.quantity ?? 0;
     const stockCpt = offer.stock_at_takealot?.find((s) => s.dc === 'CPT')?.quantity ?? 0;
+    const stockDbn = offer.stock_at_takealot?.find((s) => s.dc === 'DBN')?.quantity ?? 0;
 
     // 30-day sales units (sum across DCs)
     const salesUnits30d = offer.sales_units?.reduce((sum, s) => sum + s.units, 0) ?? 0;
@@ -158,8 +159,10 @@ async function upsertOffersBatch(sellerId: string, offers: TakealotOffer[]): Pro
       cogsSource: 'estimate' as const,
       stockJhb,
       stockCpt,
+      stockDbn,
       stockCoverDays: offer.stock_cover ?? null,
       salesUnits30d,
+      leadtimeDays: offer.leadtime_days ?? 0,
       lastSyncedAt: new Date(),
       updatedAt: new Date(),
     };
@@ -192,8 +195,10 @@ async function upsertOffersBatch(sellerId: string, offers: TakealotOffer[]): Pro
         cogsSource: sql`CASE WHEN offers.cogs_source = 'estimate' THEN excluded.cogs_source ELSE offers.cogs_source END`,
         stockJhb: sql`excluded.stock_jhb`,
         stockCpt: sql`excluded.stock_cpt`,
+        stockDbn: sql`excluded.stock_dbn`,
         stockCoverDays: sql`excluded.stock_cover_days`,
         salesUnits30d: sql`excluded.sales_units_30d`,
+        leadtimeDays: sql`excluded.leadtime_days`,
         lastSyncedAt: sql`excluded.last_synced_at`,
         updatedAt: sql`excluded.updated_at`,
       },

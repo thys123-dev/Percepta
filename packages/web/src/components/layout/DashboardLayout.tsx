@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Bell,
   PackageCheck,
+  Scale,
   Settings,
   LogOut,
   TrendingUp,
@@ -17,6 +18,7 @@ const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/dashboard/alerts', label: 'Alerts', icon: Bell },
   { path: '/dashboard/cogs', label: 'COGS', icon: PackageCheck },
+  { path: '/dashboard/fee-audit', label: 'Fee Audit', icon: Scale },
   // Future: { path: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 

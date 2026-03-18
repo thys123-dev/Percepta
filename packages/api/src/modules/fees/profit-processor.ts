@@ -48,10 +48,14 @@ export async function processCalculateProfits(
         fulfillmentDc: schema.orders.fulfillmentDc,
         customerDc: schema.orders.customerDc,
         saleStatus: schema.orders.saleStatus,
-        // Used as a proxy for ship date to select the correct fee matrix version.
-        // Takealot does not expose an explicit ship date via API; order date is the
-        // best available approximation for fee versioning purposes.
+        // Prefer actual ship date from Takealot sales report CSV when available.
+        // Falls back to orderDate as a proxy (API doesn't expose ship date).
+        dateShippedToCustomer: schema.orders.dateShippedToCustomer,
         orderDate: schema.orders.orderDate,
+        // Actual fees from Takealot CSV (null = not yet imported)
+        actualSuccessFeeCents: schema.orders.actualSuccessFeeCents,
+        actualFulfilmentFeeCents: schema.orders.actualFulfilmentFeeCents,
+        actualStockTransferFeeCents: schema.orders.actualStockTransferFeeCents,
       })
       .from(schema.orders)
       .where(
@@ -117,9 +121,9 @@ export async function processCalculateProfits(
           fulfillmentDc: order.fulfillmentDc,
           customerDc: order.customerDc,
           saleStatus: order.saleStatus,
-          // orderDate is used as the ship date proxy for fee matrix version selection.
-          // Orders on/after 2026-04-01 will use v2 (April 2026) rates automatically.
-          shipDate: order.orderDate,
+          // Prefer actual ship date from CSV import for accurate fee matrix selection.
+          // Falls back to orderDate when CSV data hasn't been imported yet.
+          shipDate: order.dateShippedToCustomer ?? order.orderDate,
         };
 
         // Calculate fees
@@ -192,6 +196,17 @@ export async function processCalculateProfits(
 
         calculated++;
         if (!profitResult.isProfitable) lossMakers++;
+
+        // ── Fee discrepancy detection (when CSV actual fees are available) ──
+        if (order.actualSuccessFeeCents != null || order.actualFulfilmentFeeCents != null || order.actualStockTransferFeeCents != null) {
+          detectFeeDiscrepancies(sellerId, order.orderId, {
+            successFee: { actual: order.actualSuccessFeeCents, calculated: feeBreakdown.successFeeTotalCents },
+            fulfilmentFee: { actual: order.actualFulfilmentFeeCents, calculated: feeBreakdown.fulfilmentFeeTotalCents },
+            stockTransferFee: { actual: order.actualStockTransferFeeCents, calculated: feeBreakdown.ibtPenaltyTotalCents },
+          }).catch((err: Error) =>
+            console.error(`[discrepancy] check failed: ${err.message}`)
+          );
+        }
 
         // ── Alert checks (fire-and-forget, don't block batch) ──
         const productTitle = order.saleStatus ?? 'Unknown Product';
@@ -266,4 +281,52 @@ function buildDefaultOfferInput(order: {
     weightGrams: null,
     stockCoverDays: null,
   };
+}
+
+/**
+ * Detect and store fee discrepancies between Takealot's actual fees (from CSV)
+ * and our calculated estimates. Only creates rows for significant discrepancies (>5%).
+ */
+async function detectFeeDiscrepancies(
+  sellerId: string,
+  orderId: string,
+  fees: Record<string, { actual: number | null; calculated: number }>
+): Promise<void> {
+  const THRESHOLD_PCT = 5; // Only flag discrepancies > 5%
+
+  const rows: Array<{
+    sellerId: string;
+    orderId: string;
+    feeType: string;
+    actualCents: number;
+    calculatedCents: number;
+    discrepancyCents: number;
+    discrepancyPct: string;
+  }> = [];
+
+  for (const [feeType, { actual, calculated }] of Object.entries(fees)) {
+    if (actual == null) continue; // No actual data for this fee type
+
+    const discrepancy = actual - calculated;
+    const pct = actual !== 0 ? Math.round(Math.abs(discrepancy) / Math.abs(actual) * 10000) / 100 : 0;
+
+    if (pct > THRESHOLD_PCT || (actual === 0 && calculated > 0) || (actual > 0 && calculated === 0)) {
+      rows.push({
+        sellerId,
+        orderId,
+        feeType: feeType.replace(/([A-Z])/g, '_$1').toLowerCase(), // camelCase → snake_case
+        actualCents: actual,
+        calculatedCents: calculated,
+        discrepancyCents: discrepancy,
+        discrepancyPct: pct.toString(),
+      });
+    }
+  }
+
+  if (rows.length > 0) {
+    await db
+      .insert(schema.feeDiscrepancies)
+      .values(rows)
+      .onConflictDoNothing(); // safe to re-run
+  }
 }
