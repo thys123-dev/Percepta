@@ -23,6 +23,7 @@ import { processInitialSync } from './jobs/initial-sync.js';
 import { processSyncOffers } from './jobs/sync-offers.js';
 import { processSyncSales } from './jobs/sync-sales.js';
 import { processDailySync } from './jobs/daily-sync.js';
+import { processCalculateProfits } from '../fees/profit-processor.js';
 
 const CONCURRENCY = 2; // Process up to 2 sync jobs at once (be gentle on Takealot API)
 
@@ -83,21 +84,21 @@ export function startWorkers() {
     console.error(`[sync-sales] ✗ Seller ${job?.data.sellerId}: ${err.message}`);
   });
 
-  // ---- calculate-profits worker (placeholder — implemented Week 3) ----
+  // ---- calculate-profits worker (fee engine + profit calculation) ----
   const calculateProfitsWorker = new Worker(
     'calculate-profits',
-    async (job) => {
-      // Stub: will be implemented in Week 3 (fee calculation engine)
-      console.info(
-        `[calculate-profits] Queued for seller ${job.data.sellerId}: ${job.data.orderIds.length} orders (Week 3)`
-      );
-      return { calculated: 0 };
-    },
+    processCalculateProfits,
     {
       connection: redisConnection.duplicate(),
-      concurrency: 5, // Higher concurrency since this will be CPU-bound math, not I/O
+      concurrency: 5,
     }
   );
+
+  calculateProfitsWorker.on('completed', (job, result) => {
+    console.info(
+      `[calculate-profits] ✓ Seller ${job.data.sellerId}: ${result.calculated} orders, ${result.lossMakers} loss-makers`
+    );
+  });
 
   calculateProfitsWorker.on('failed', (job, err) => {
     console.error(`[calculate-profits] ✗ Seller ${job?.data.sellerId}: ${err.message}`);
