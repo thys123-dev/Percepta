@@ -1,37 +1,69 @@
+/**
+ * DashboardPage — the "aha moment" screen
+ *
+ * Shows sellers their real profit at a glance:
+ *   1. Period selector — 7d / 30d / 90d / custom
+ *   2. Profitability Scorecard — Net Profit, Revenue, Margin %, Loss-Makers
+ *   3. Product Performance Table — sortable, filterable, expandable fee breakdown
+ *
+ * Real-time updates are handled by useRealtimeUpdates() mounted in DashboardLayout,
+ * which invalidates the 'dashboard-summary' and 'products' query keys when
+ * a new webhook-triggered profit calculation arrives.
+ */
+
+import { useState } from 'react';
+import { ProfitScorecard } from '../components/dashboard/ProfitScorecard.js';
+import { ProductTable } from '../components/dashboard/ProductTable.js';
+import { PeriodSelector } from '../components/dashboard/PeriodSelector.js';
+import type { Period, PeriodParams } from '../hooks/useDashboard.js';
+
 export function DashboardPage() {
+  const [period, setPeriod] = useState<Period>('30d');
+  const [startDate, setStartDate] = useState<string | undefined>();
+  const [endDate, setEndDate] = useState<string | undefined>();
+
+  const periodParams: PeriodParams = {
+    period,
+    // Only include custom date range when explicitly selected
+    ...(period === 'custom' && startDate ? { startDate } : {}),
+    ...(period === 'custom' && endDate ? { endDate } : {}),
+  };
+
   return (
     <div className="space-y-6">
-      {/* Profitability Scorecard — Week 5 */}
-      <section>
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Profitability Overview</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="metric-card">
-            <span className="metric-label">Net Profit (30d)</span>
-            <span className="metric-value text-profit-positive">—</span>
-          </div>
-          <div className="metric-card">
-            <span className="metric-label">Total Revenue</span>
-            <span className="metric-value">—</span>
-          </div>
-          <div className="metric-card">
-            <span className="metric-label">Profit Margin</span>
-            <span className="metric-value">—</span>
-          </div>
-          <div className="metric-card">
-            <span className="metric-label">Loss-Making Products</span>
-            <span className="metric-value text-profit-negative">—</span>
-          </div>
+      {/* Page header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">Profitability Dashboard</h1>
+          <p className="mt-0.5 text-sm text-gray-500">
+            Real-time profit visibility for your Takealot business
+          </p>
         </div>
-      </section>
 
-      {/* Product Performance Table — Week 5 */}
+        <PeriodSelector
+          value={period}
+          onChange={setPeriod}
+          startDate={startDate}
+          endDate={endDate}
+          onStartDateChange={setStartDate}
+          onEndDateChange={setEndDate}
+        />
+      </div>
+
+      {/* Profitability Scorecard — 4 KPI cards */}
+      <ProfitScorecard periodParams={periodParams} />
+
+      {/* Product Performance Table */}
       <section>
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">Product Performance</h2>
-        <div className="card overflow-hidden p-0">
-          <div className="flex items-center justify-center py-20 text-gray-400">
-            Connect your Takealot account to see product performance
-          </div>
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Product Performance</h2>
+          <p className="mt-0.5 text-sm text-gray-500">
+            Default sort: lowest margin first — loss-makers surface at the top.
+            Click any row to see a full fee waterfall breakdown.
+          </p>
         </div>
+
+        <ProductTable periodParams={periodParams} />
       </section>
     </div>
   );
