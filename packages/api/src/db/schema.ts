@@ -190,12 +190,20 @@ export const feeSchedule = pgTable('fee_schedule', {
   id: uuid('id').primaryKey().defaultRandom(),
   feeType: varchar('fee_type', { length: 30 }).notNull(),
   category: varchar('category', { length: 255 }),
+  /**
+   * April 2026: Standard tier split into 4 category groups.
+   * Values: standard_a | standard_b | standard_c | standard_d
+   *       | large | oversize | bulky | extra_bulky
+   * null = not applicable (used for non-Standard size tiers)
+   */
+  categoryGroup: varchar('category_group', { length: 30 }),
   sizeTier: varchar('size_tier', { length: 30 }),
   weightTier: varchar('weight_tier', { length: 30 }),
   subcategory: varchar('subcategory', { length: 255 }),
   minRate: decimal('min_rate', { precision: 7, scale: 2 }),
   maxRate: decimal('max_rate', { precision: 7, scale: 2 }),
   flatRateCents: integer('flat_rate_cents'),
+  calculationVersion: varchar('calculation_version', { length: 20 }).default('v2025-07'),
   effectiveFrom: timestamp('effective_from', { mode: 'date' }).notNull(),
   effectiveTo: timestamp('effective_to', { mode: 'date' }),
   notes: text('notes'),

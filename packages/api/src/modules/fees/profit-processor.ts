@@ -48,6 +48,10 @@ export async function processCalculateProfits(
         fulfillmentDc: schema.orders.fulfillmentDc,
         customerDc: schema.orders.customerDc,
         saleStatus: schema.orders.saleStatus,
+        // Used as a proxy for ship date to select the correct fee matrix version.
+        // Takealot does not expose an explicit ship date via API; order date is the
+        // best available approximation for fee versioning purposes.
+        orderDate: schema.orders.orderDate,
       })
       .from(schema.orders)
       .where(
@@ -113,6 +117,9 @@ export async function processCalculateProfits(
           fulfillmentDc: order.fulfillmentDc,
           customerDc: order.customerDc,
           saleStatus: order.saleStatus,
+          // orderDate is used as the ship date proxy for fee matrix version selection.
+          // Orders on/after 2026-04-01 will use v2 (April 2026) rates automatically.
+          shipDate: order.orderDate,
         };
 
         // Calculate fees

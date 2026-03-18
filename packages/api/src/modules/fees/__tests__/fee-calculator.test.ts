@@ -1,8 +1,12 @@
 /**
  * Fee Calculator Unit Tests
  *
- * Validates all fee types against known values from the
- * Takealot Pricing Schedule (July 2025).
+ * Covers both fee schedule versions:
+ *   v1 — July 2025 Pricing Schedule (orders shipped before 2026-04-01)
+ *   v2 — April 2026 Pricing Schedule (orders shipped on or after 2026-04-01)
+ *
+ * Tests that check specific fee amounts explicitly set a shipDate so the
+ * correct matrix version is used. Tests without a shipDate use v2 (default).
  */
 
 import { describe, it, expect } from 'vitest';
@@ -18,6 +22,10 @@ import {
   type FeeOfferInput,
   type FeeOrderInput,
 } from '../fee-calculator.js';
+
+// Shared date constants
+const SHIP_DATE_V1 = new Date('2025-07-01'); // Pre-April 2026 → v1 rates
+const SHIP_DATE_V2 = new Date('2026-04-02'); // Post-April 2026 → v2 rates
 
 // =============================================================================
 // Success Fee Tests
@@ -197,11 +205,13 @@ describe('calculateFees', () => {
     stockCoverDays: 20, // Under 35 days — no storage fee
   };
 
+  // Pinned to a pre-April-2026 ship date so fee-value assertions use v1 rates.
   const standardOrder: FeeOrderInput = {
     quantity: 1,
     fulfillmentDc: 'JHB',
     customerDc: 'JHB', // Same region — no IBT
     saleStatus: 'Shipped to Customer',
+    shipDate: SHIP_DATE_V1,
   };
 
   it('calculates success fee correctly (Books @ 14%)', () => {
@@ -463,5 +473,237 @@ describe('classifyIbtSize', () => {
 
   it('defaults to Standard when null', () => {
     expect(classifyIbtSize(null)).toBe('Standard');
+  });
+});
+
+// =============================================================================
+// April 2026 Fee Schedule (v2) — calculateFees with shipDate >= 2026-04-01
+// =============================================================================
+
+describe('calculateFees — April 2026 v2 rates', () => {
+  const baseOffer: FeeOfferInput = {
+    sellingPriceCents: 19900,
+    category: 'Books',
+    volumeCm3: 2000,
+    weightGrams: 500,
+    stockCoverDays: 20,
+  };
+
+  const v2Order: FeeOrderInput = {
+    quantity: 1,
+    fulfillmentDc: 'JHB',
+    customerDc: 'JHB',
+    saleStatus: 'Shipped to Customer',
+    shipDate: SHIP_DATE_V2,
+  };
+
+  // ── Standard_General (standard_c) ─────────────────────────────────────────
+  it('Standard_General Light: R45 = 4500 cents (was R42)', () => {
+    const result = calculateFees({ ...baseOffer, category: 'Books' }, v2Order);
+    expect(result.fulfilmentFeePerUnitCents).toBe(4500);
+    expect(result.meta.fulfilmentSizeTier).toBe('Standard_General');
+    expect(result.meta.calculationVersion).toBe(2);
+  });
+
+  it('Standard_General Heavy: R52 = 5200 cents (was R47)', () => {
+    const result = calculateFees(
+      { ...baseOffer, category: 'Books', weightGrams: 10_000 },
+      v2Order
+    );
+    expect(result.fulfilmentFeePerUnitCents).toBe(5200);
+    expect(result.meta.fulfilmentWeightTier).toBe('Heavy');
+  });
+
+  it('Standard_General HeavyPlus: R107 = 10700 cents (was R100)', () => {
+    const result = calculateFees(
+      { ...baseOffer, category: 'Books', weightGrams: 30_000 },
+      v2Order
+    );
+    expect(result.fulfilmentFeePerUnitCents).toBe(10700);
+    expect(result.meta.fulfilmentWeightTier).toBe('HeavyPlus');
+  });
+
+  // ── Standard_NonPerishable (standard_a) ────────────────────────────────────
+  it('Standard_NonPerishable Light: R22 = 2200 cents (was R20)', () => {
+    const result = calculateFees({ ...baseOffer, category: 'Non-Perishable' }, v2Order);
+    expect(result.fulfilmentFeePerUnitCents).toBe(2200);
+    expect(result.meta.fulfilmentSizeTier).toBe('Standard_NonPerishable');
+  });
+
+  it('Standard_NonPerishable Heavy: R52 = 5200 cents (was R47)', () => {
+    const result = calculateFees(
+      { ...baseOffer, category: 'Non-Perishable', weightGrams: 10_000 },
+      v2Order
+    );
+    expect(result.fulfilmentFeePerUnitCents).toBe(5200);
+  });
+
+  // ── Standard_FMCG (standard_b) ────────────────────────────────────────────
+  it('Standard_FMCG Light: R33 = 3300 cents (was R30)', () => {
+    const result = calculateFees({ ...baseOffer, category: 'Baby' }, v2Order);
+    expect(result.fulfilmentFeePerUnitCents).toBe(3300);
+    expect(result.meta.fulfilmentSizeTier).toBe('Standard_FMCG');
+  });
+
+  it('Consumer Beauty maps to Standard_FMCG (April 2026 alias)', () => {
+    const result = calculateFees({ ...baseOffer, category: 'Consumer Beauty' }, v2Order);
+    expect(result.meta.fulfilmentSizeTier).toBe('Standard_FMCG');
+    expect(result.fulfilmentFeePerUnitCents).toBe(3300);
+  });
+
+  it('Health FMCG maps to Standard_FMCG (April 2026 alias)', () => {
+    const result = calculateFees({ ...baseOffer, category: 'Health FMCG' }, v2Order);
+    expect(result.meta.fulfilmentSizeTier).toBe('Standard_FMCG');
+  });
+
+  // ── Standard_Electronics (standard_d) ────────────────────────────────────
+  it('Standard_Electronics Light: R60 = 6000 cents (was R55)', () => {
+    const result = calculateFees({ ...baseOffer, category: 'Mobile' }, v2Order);
+    expect(result.fulfilmentFeePerUnitCents).toBe(6000);
+    expect(result.meta.fulfilmentSizeTier).toBe('Standard_Electronics');
+  });
+
+  it('Standard_Electronics Heavy: R60 = 6000 cents (was R55)', () => {
+    const result = calculateFees(
+      { ...baseOffer, category: 'Mobile', weightGrams: 10_000 },
+      v2Order
+    );
+    expect(result.fulfilmentFeePerUnitCents).toBe(6000);
+  });
+
+  it('Small Kitchen Appliances maps to Standard_Electronics (April 2026 new)', () => {
+    const result = calculateFees({ ...baseOffer, category: 'Small Kitchen Appliances' }, v2Order);
+    expect(result.meta.fulfilmentSizeTier).toBe('Standard_Electronics');
+  });
+
+  it('Smart Audio Technology maps to Standard_Electronics (April 2026 new)', () => {
+    const result = calculateFees({ ...baseOffer, category: 'Smart Audio Technology' }, v2Order);
+    expect(result.meta.fulfilmentSizeTier).toBe('Standard_Electronics');
+  });
+
+  it('Certified Pre-Owned Electronics maps to Standard_Electronics (April 2026 new)', () => {
+    const result = calculateFees({ ...baseOffer, category: 'Certified Pre-Owned Electronics' }, v2Order);
+    expect(result.meta.fulfilmentSizeTier).toBe('Standard_Electronics');
+  });
+
+  // ── Large ─────────────────────────────────────────────────────────────────
+  it('Large Light: R60 = 6000 cents (was R55)', () => {
+    const result = calculateFees({ ...baseOffer, volumeCm3: 50_000 }, v2Order);
+    expect(result.fulfilmentFeePerUnitCents).toBe(6000);
+    expect(result.meta.fulfilmentSizeTier).toBe('Large');
+  });
+
+  it('Large VeryHeavy: R118 = 11800 cents (was R110)', () => {
+    const result = calculateFees(
+      { ...baseOffer, volumeCm3: 50_000, weightGrams: 50_000 },
+      v2Order
+    );
+    expect(result.fulfilmentFeePerUnitCents).toBe(11800);
+    expect(result.meta.fulfilmentWeightTier).toBe('VeryHeavy');
+  });
+
+  // ── Oversize ──────────────────────────────────────────────────────────────
+  it('Oversize Light: R107 = 10700 cents (was R100)', () => {
+    const result = calculateFees({ ...baseOffer, volumeCm3: 150_000 }, v2Order);
+    expect(result.fulfilmentFeePerUnitCents).toBe(10700);
+    expect(result.meta.fulfilmentSizeTier).toBe('Oversize');
+  });
+
+  it('Oversize Heavy: R130 = 13000 cents (was R120)', () => {
+    const result = calculateFees(
+      { ...baseOffer, volumeCm3: 150_000, weightGrams: 10_000 },
+      v2Order
+    );
+    expect(result.fulfilmentFeePerUnitCents).toBe(13000);
+  });
+
+  // ── Bulky ─────────────────────────────────────────────────────────────────
+  it('Bulky Light: R107 = 10700 cents (was R100)', () => {
+    const result = calculateFees({ ...baseOffer, volumeCm3: 300_000 }, v2Order);
+    expect(result.fulfilmentFeePerUnitCents).toBe(10700);
+    expect(result.meta.fulfilmentSizeTier).toBe('Bulky');
+  });
+
+  it('Bulky VeryHeavy: R172 = 17200 cents (was R160)', () => {
+    const result = calculateFees(
+      { ...baseOffer, volumeCm3: 300_000, weightGrams: 50_000 },
+      v2Order
+    );
+    expect(result.fulfilmentFeePerUnitCents).toBe(17200);
+  });
+
+  // ── Extra Bulky ───────────────────────────────────────────────────────────
+  it('ExtraBulky Light: R270 = 27000 cents (was R250)', () => {
+    const result = calculateFees({ ...baseOffer, volumeCm3: 600_000 }, v2Order);
+    expect(result.fulfilmentFeePerUnitCents).toBe(27000);
+    expect(result.meta.fulfilmentSizeTier).toBe('ExtraBulky');
+  });
+
+  it('ExtraBulky VeryHeavy: R390 = 39000 cents (was R360)', () => {
+    const result = calculateFees(
+      { ...baseOffer, volumeCm3: 600_000, weightGrams: 50_000 },
+      v2Order
+    );
+    expect(result.fulfilmentFeePerUnitCents).toBe(39000);
+  });
+
+  // ── Boundary: exactly 2026-04-01 uses v2 ─────────────────────────────────
+  it('ship date exactly 2026-04-01 00:00 UTC uses v2 rates', () => {
+    const onEffectiveDate: FeeOrderInput = {
+      ...v2Order,
+      shipDate: new Date('2026-04-01T00:00:00.000Z'),
+    };
+    const result = calculateFees({ ...baseOffer, category: 'Books' }, onEffectiveDate);
+    expect(result.fulfilmentFeePerUnitCents).toBe(4500); // v2 rate
+    expect(result.meta.calculationVersion).toBe(2);
+  });
+
+  // ── Boundary: 2026-03-31 uses v1 ─────────────────────────────────────────
+  it('ship date 2026-03-31 uses v1 rates', () => {
+    const beforeEffectiveDate: FeeOrderInput = {
+      ...v2Order,
+      shipDate: new Date('2026-03-31T23:59:59.000Z'),
+    };
+    const result = calculateFees({ ...baseOffer, category: 'Books' }, beforeEffectiveDate);
+    expect(result.fulfilmentFeePerUnitCents).toBe(4200); // v1 rate
+    expect(result.meta.calculationVersion).toBe(1);
+  });
+
+  // ── Lead-time order: sold March, shipped April → v2 ──────────────────────
+  it('lead-time order sold 2026-03-28, shipped 2026-04-02 uses v2 rates', () => {
+    const leadTimeOrder: FeeOrderInput = {
+      ...v2Order,
+      shipDate: new Date('2026-04-02'),
+    };
+    const result = calculateFees({ ...baseOffer, category: 'Non-Perishable' }, leadTimeOrder);
+    // standard_a Light v2 = R22 = 2200 cents
+    expect(result.fulfilmentFeePerUnitCents).toBe(2200);
+    expect(result.meta.calculationVersion).toBe(2);
+  });
+
+  // ── Lead-time order: sold March, shipped March → v1 ──────────────────────
+  it('lead-time order sold 2026-03-28, shipped 2026-03-30 uses v1 rates', () => {
+    const leadTimeOrder: FeeOrderInput = {
+      ...v2Order,
+      shipDate: new Date('2026-03-30'),
+    };
+    const result = calculateFees({ ...baseOffer, category: 'Non-Perishable' }, leadTimeOrder);
+    // standard_a Light v1 = R20 = 2000 cents
+    expect(result.fulfilmentFeePerUnitCents).toBe(2000);
+    expect(result.meta.calculationVersion).toBe(1);
+  });
+
+  // ── No shipDate defaults to v2 ────────────────────────────────────────────
+  it('no shipDate defaults to v2 (latest)', () => {
+    const noDateOrder: FeeOrderInput = {
+      quantity: 1,
+      fulfillmentDc: 'JHB',
+      customerDc: 'JHB',
+      saleStatus: 'Shipped to Customer',
+      // shipDate omitted
+    };
+    const result = calculateFees({ ...baseOffer, category: 'Books' }, noDateOrder);
+    expect(result.fulfilmentFeePerUnitCents).toBe(4500); // v2
+    expect(result.meta.calculationVersion).toBe(2);
   });
 });

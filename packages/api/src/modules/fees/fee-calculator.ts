@@ -2,7 +2,8 @@
  * Takealot Fee Calculation Engine
  *
  * The most business-critical code in Percepta. Calculates all fees for a
- * given order line item based on the Takealot Pricing Schedule (July 2025).
+ * given order line item based on the active Takealot Pricing Schedule.
+ * Fee matrix version is selected from the order's ship date (see fee-tables.ts).
  *
  * Fee pipeline: (offer, order) → FeeBreakdownResult
  *
@@ -16,7 +17,8 @@
 import {
   SUCCESS_FEE_RATES,
   DEFAULT_SUCCESS_FEE_PCT,
-  FULFILMENT_FEE_MATRIX,
+  getFulfilmentMatrix,
+  getFulfilmentVersion,
   FULFILMENT_CATEGORY_MAP,
   STORAGE_TIERS,
   STORAGE_GRACE_PERIOD_DAYS,
@@ -48,6 +50,13 @@ export interface FeeOrderInput {
   fulfillmentDc: string | null;
   customerDc: string | null;
   saleStatus: string | null;
+  /**
+   * Ship date (or order date as proxy) used to select the correct fee matrix version.
+   * - On/after 2026-04-01 → v2 (April 2026 rates)
+   * - Before 2026-04-01  → v1 (July 2025 rates)
+   * - null/undefined     → v2 (latest, safe default for new ingestion)
+   */
+  shipDate?: Date | string | null;
 }
 
 /** Complete fee breakdown for a single order line item */
@@ -83,8 +92,8 @@ export interface FeeBreakdownResult {
   };
 }
 
-// Current calculation version — increment when fee rules change
-const CALCULATION_VERSION = 1;
+// CALCULATION_VERSION is now derived dynamically from the order's ship date.
+// See getFulfilmentVersion() in fee-tables.ts.
 
 // =============================================================================
 // Main Calculator
@@ -110,11 +119,11 @@ export function calculateFees(
     offer.sellingPriceCents * (successFeeRatePct / 100)
   );
 
-  // 2. Fulfilment fee (size x weight x category matrix lookup)
+  // 2. Fulfilment fee (size × weight × category matrix, version selected by ship date)
   const fulfilmentWeightTier = classifyFulfilmentWeight(offer.weightGrams);
   const fulfilmentSizeTier = classifyFulfilmentSize(offer.volumeCm3, offer.category);
-  const fulfilmentFeePerUnitCents =
-    FULFILMENT_FEE_MATRIX[fulfilmentSizeTier][fulfilmentWeightTier];
+  const feeMatrix = getFulfilmentMatrix(order.shipDate);
+  const fulfilmentFeePerUnitCents = feeMatrix[fulfilmentSizeTier][fulfilmentWeightTier];
 
   // 3. IBT penalty (only if fulfillment DC ≠ customer DC)
   const isIbt = detectIbt(order.fulfillmentDc, order.customerDc);
@@ -185,7 +194,7 @@ export function calculateFees(
       isIbt,
       isOverstocked,
       hasDimensions,
-      calculationVersion: CALCULATION_VERSION,
+      calculationVersion: getFulfilmentVersion(order.shipDate),
     },
   };
 }
