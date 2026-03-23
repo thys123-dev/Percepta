@@ -244,6 +244,7 @@ export async function processCalculateProfits(
           offerId: order.offerIdNum,
           productTitle: alertTitle,
           currentMarginPct: profitResult.profitMarginPct,
+          netProfitCents: profitResult.netProfitCents,
         }).catch((err: Error) =>
           console.error(`[alert] margin_drop check failed: ${err.message}`)
         );

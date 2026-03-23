@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Bell,
@@ -19,11 +19,12 @@ const navItems = [
   { path: '/dashboard/alerts', label: 'Alerts', icon: Bell },
   { path: '/dashboard/cogs', label: 'COGS', icon: PackageCheck },
   { path: '/dashboard/fee-audit', label: 'Fee Audit', icon: Scale },
-  // Future: { path: '/dashboard/settings', label: 'Settings', icon: Settings },
+  { path: '/dashboard/notifications', label: 'Notifications', icon: Settings },
 ];
 
 export function DashboardLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
   // Mount real-time update subscription for the entire dashboard session
   const { connected: wsConnected } = useRealtimeUpdates();
 
@@ -108,7 +109,11 @@ export function DashboardLayout() {
               </div>
             )}
             <AlertBell />
-            <button className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700">
+            <button
+              onClick={() => navigate('/dashboard/notifications')}
+              className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+              title="Notification settings"
+            >
               <Settings className="h-5 w-5" />
             </button>
           </div>
