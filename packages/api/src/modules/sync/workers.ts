@@ -11,7 +11,7 @@
 import { Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
-import { redisConnection, progressPublisher } from './redis.js';
+import { redisConnection, progressPublisher, cacheInvalidate } from './redis.js';
 import { publishProfitUpdate } from './redis.js';
 import { pool } from '../../db/index.js';
 import {
@@ -122,6 +122,11 @@ export function startWorkers() {
       triggeredBy,
     }).catch((err: Error) => {
       console.error(`[calculate-profits] Failed to publish profit update: ${err.message}`);
+    });
+
+    // Invalidate cached dashboard data so next request reflects updated profits
+    cacheInvalidate(`dashboard:${job.data.sellerId}:*`).catch((err: Error) => {
+      console.error(`[calculate-profits] Failed to invalidate dashboard cache: ${err.message}`);
     });
   });
 

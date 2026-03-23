@@ -17,6 +17,9 @@ import { and, eq, gte, lte, sql, desc, asc, notInArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db, schema } from '../../db/index.js';
 import { authenticate } from '../../middleware/auth.js';
+import { cacheGet, cacheSet } from '../sync/redis.js';
+
+const CACHE_TTL_SECONDS = 5 * 60; // 5 minutes
 
 // =============================================================================
 // Constants
@@ -101,6 +104,10 @@ export async function dashboardRoutes(server: FastifyInstance) {
     const { period, startDate, endDate } = periodQuerySchema.parse(request.query);
     const { start, end } = getPeriodDates(period, startDate, endDate);
 
+    const cacheKey = `dashboard:${sellerId}:summary:${period}:${start.toISOString()}:${end.toISOString()}`;
+    const cached = await cacheGet(cacheKey);
+    if (cached !== null) return cached;
+
     // Previous period (same duration) for trend comparison
     const durationMs = end.getTime() - start.getTime();
     const prevEnd   = new Date(start.getTime() - 1);
@@ -164,7 +171,7 @@ export async function dashboardRoutes(server: FastifyInstance) {
         ? Math.round((prevProfit / prevRevenue) * 10000) / 100
         : 0;
 
-    return {
+    const result = {
       period: { startDate: start.toISOString(), endDate: end.toISOString(), label: period },
       totalRevenueCents:  totalRevenue,
       totalFeesCents:     Number(current?.totalFees ?? 0),
@@ -181,6 +188,9 @@ export async function dashboardRoutes(server: FastifyInstance) {
         marginDelta:  Math.round((profitMarginPct - prevMarginPct) * 10) / 10,
       },
     };
+
+    cacheSet(cacheKey, result, CACHE_TTL_SECONDS).catch(() => {});
+    return result;
   });
 
   // ---------------------------------------------------------------------------
@@ -191,6 +201,10 @@ export async function dashboardRoutes(server: FastifyInstance) {
     const params = productsQuerySchema.parse(request.query);
     const { start, end } = getPeriodDates(params.period, params.startDate, params.endDate);
     const offset = (params.page - 1) * params.limit;
+
+    const cacheKey = `dashboard:${sellerId}:products:${params.period}:${start.toISOString()}:${end.toISOString()}:${params.sort}:${params.order}:${params.page}:${params.limit}`;
+    const cached = await cacheGet(cacheKey);
+    if (cached !== null) return cached;
 
     const baseWhere = and(
       eq(schema.profitCalculations.sellerId, sellerId),
@@ -259,7 +273,7 @@ export async function dashboardRoutes(server: FastifyInstance) {
       .innerJoin(schema.orders, eq(schema.profitCalculations.orderId, schema.orders.id))
       .where(baseWhere);
 
-    return {
+    const result = {
       data: products.map((p) => ({
         offerId:          p.offerId ?? 0,
         title:            p.title ?? 'Unknown Product',
@@ -285,6 +299,9 @@ export async function dashboardRoutes(server: FastifyInstance) {
         totalPages: Math.ceil(Number(countResult?.total ?? 0) / params.limit),
       },
     };
+
+    cacheSet(cacheKey, result, CACHE_TTL_SECONDS).catch(() => {});
+    return result;
   });
 
   // ---------------------------------------------------------------------------
@@ -383,6 +400,10 @@ export async function dashboardRoutes(server: FastifyInstance) {
     const { period, startDate, endDate } = periodQuerySchema.parse(request.query);
     const { start, end } = getPeriodDates(period, startDate, endDate);
 
+    const cacheKey = `dashboard:${sellerId}:fee-summary:${period}:${start.toISOString()}:${end.toISOString()}`;
+    const cached = await cacheGet(cacheKey);
+    if (cached !== null) return cached;
+
     const [totals] = await db
       .select({
         totalRevenue:       sql<string>`COALESCE(SUM(${schema.profitCalculations.revenueCents}), 0)`,
@@ -420,12 +441,15 @@ export async function dashboardRoutes(server: FastifyInstance) {
 
     const totalFees = Number(totals?.totalFees ?? 0);
 
-    return {
+    const result = {
       period: { startDate: start.toISOString(), endDate: end.toISOString() },
       totalRevenueCents: totalRevenue,
       feeBreakdown,
       totalFeesCents: totalFees,
       totalFeesPctOfRevenue: pctOf(totalFees),
     };
+
+    cacheSet(cacheKey, result, CACHE_TTL_SECONDS).catch(() => {});
+    return result;
   });
 }
