@@ -1,9 +1,20 @@
+import * as Sentry from '@sentry/node';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { env } from './config/env.js';
+
+// Initialise Sentry early so it captures all subsequent errors.
+// No-ops when SENTRY_DSN is not set.
+if (env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: env.SENTRY_DSN,
+    environment: env.NODE_ENV,
+    tracesSampleRate: 0.1,
+  });
+}
 import { authRoutes } from './modules/auth/routes.js';
 import { sellerRoutes } from './modules/sellers/routes.js';
 import { webhookRoutes } from './modules/webhooks/routes.js';
@@ -106,6 +117,7 @@ async function main() {
     // Start BullMQ workers after server is listening
     startWorkers();
   } catch (err) {
+    Sentry.captureException(err);
     server.log.error(err);
     process.exit(1);
   }
