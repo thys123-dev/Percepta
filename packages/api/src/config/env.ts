@@ -19,7 +19,8 @@ const envSchema = z.object({
 
   TAKEALOT_API_BASE_URL: z.string().url().default('https://seller-api.takealot.com'),
 
-  WEBHOOK_PATH: z.string().default('/api/webhooks/takealot'),
+  // Public URL of this API server (used to construct webhook URLs shown to sellers)
+  API_BASE_URL: z.string().default('http://localhost:3001'),
 
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default('alerts@percepta.co.za'),

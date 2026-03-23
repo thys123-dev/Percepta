@@ -48,3 +48,6 @@ api.interceptors.response.use(
 );
 
 export default api;
+
+// Named export for hooks that destructure: import { apiClient } from '../services/api.js'
+export const apiClient = api;

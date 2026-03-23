@@ -7,6 +7,10 @@ import { sellerRoutes } from './modules/sellers/routes.js';
 import { webhookRoutes } from './modules/webhooks/routes.js';
 import { dashboardRoutes } from './modules/dashboard/routes.js';
 import { alertRoutes } from './modules/alerts/routes.js';
+import { syncRoutes } from './modules/sync/routes.js';
+import { salesReportRoutes } from './modules/fees/sales-report-routes.js';
+import { startWorkers } from './modules/sync/workers.js';
+import { setupSocketIO } from './modules/realtime/socket.js';
 
 export async function buildServer() {
   const server = Fastify({
@@ -39,9 +43,11 @@ export async function buildServer() {
   // Routes
   await server.register(authRoutes, { prefix: '/api/auth' });
   await server.register(sellerRoutes, { prefix: '/api/sellers' });
+  await server.register(syncRoutes, { prefix: '/api/sync' });
   await server.register(webhookRoutes, { prefix: '/api/webhooks' });
   await server.register(dashboardRoutes, { prefix: '/api/dashboard' });
   await server.register(alertRoutes, { prefix: '/api/alerts' });
+  await server.register(salesReportRoutes, { prefix: '/api/sales-report' });
 
   return server;
 }
@@ -53,6 +59,14 @@ async function main() {
   try {
     await server.listen({ port: env.PORT, host: env.HOST });
     server.log.info(`🚀 Percepta API running at http://${env.HOST}:${env.PORT}`);
+
+    // Attach Socket.io to the underlying Node.js HTTP server
+    // Must be called AFTER listen() so server.server is available
+    setupSocketIO(server.server, env);
+    server.log.info('🔌 Socket.io WebSocket server attached');
+
+    // Start BullMQ workers after server is listening
+    startWorkers();
   } catch (err) {
     server.log.error(err);
     process.exit(1);

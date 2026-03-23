@@ -2,21 +2,30 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Bell,
+  PackageCheck,
+  Scale,
   Settings,
   LogOut,
   TrendingUp,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useRealtimeUpdates } from '../../hooks/useRealtimeUpdates.js';
+import { AlertBell } from '../alerts/AlertBell.js';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  // Future: { path: '/dashboard/products', label: 'Products', icon: Package },
-  // Future: { path: '/dashboard/alerts', label: 'Alerts', icon: Bell },
+  { path: '/dashboard/alerts', label: 'Alerts', icon: Bell },
+  { path: '/dashboard/cogs', label: 'COGS', icon: PackageCheck },
+  { path: '/dashboard/fee-audit', label: 'Fee Audit', icon: Scale },
   // Future: { path: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 
 export function DashboardLayout() {
   const location = useLocation();
+  // Mount real-time update subscription for the entire dashboard session
+  const { connected: wsConnected } = useRealtimeUpdates();
 
   const handleLogout = () => {
     localStorage.removeItem('percepta_token');
@@ -86,14 +95,19 @@ export function DashboardLayout() {
 
           {/* Right side: notifications + settings */}
           <div className="flex items-center gap-3">
-            {/* Real-time indicator — will pulse when webhook data arrives */}
-            <div className="flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-              Live
-            </div>
-            <button className="relative rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700">
-              <Bell className="h-5 w-5" />
-            </button>
+            {/* Real-time WebSocket indicator */}
+            {wsConnected ? (
+              <div className="flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700">
+                <Wifi className="h-3 w-3" />
+                Live
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-500">
+                <WifiOff className="h-3 w-3" />
+                Offline
+              </div>
+            )}
+            <AlertBell />
             <button className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700">
               <Settings className="h-5 w-5" />
             </button>

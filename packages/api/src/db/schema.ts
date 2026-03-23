@@ -23,6 +23,7 @@ export const sellers = pgTable('sellers', {
   businessName: varchar('business_name', { length: 255 }),
   apiKeyEnc: varchar('api_key_enc', { length: 512 }),
   apiKeyValid: boolean('api_key_valid').default(true),
+  webhookSecret: varchar('webhook_secret', { length: 64 }), // HMAC-SHA256 signing secret for Takealot webhooks
   isVatVendor: boolean('is_vat_vendor').default(false),
   vatNumber: varchar('vat_number', { length: 20 }),
   targetMarginPct: decimal('target_margin_pct', { precision: 5, scale: 2 }).default('25.00'),
@@ -67,11 +68,15 @@ export const offers = pgTable(
     cogsSource: varchar('cogs_source', { length: 20 }).default('estimate'),
     inboundCostCents: integer('inbound_cost_cents').default(0),
 
-    // Stock
+    // Stock (per-DC, matching bulk replenishment template layout: CPT, JHB, DBN)
     stockJhb: integer('stock_jhb').default(0),
     stockCpt: integer('stock_cpt').default(0),
+    stockDbn: integer('stock_dbn').default(0),
     stockCoverDays: integer('stock_cover_days'),
     salesUnits30d: integer('sales_units_30d').default(0),
+
+    // Leadtime (business days seller takes to deliver to Takealot DC; 0 = in-stock only)
+    leadtimeDays: integer('leadtime_days').default(0),
 
     lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
@@ -110,6 +115,27 @@ export const orders = pgTable(
     isIbt: boolean('is_ibt').default(false),
     promotion: varchar('promotion', { length: 255 }),
     source: varchar('source', { length: 20 }).default('api'),
+
+    // ── Actual ship date from Takealot sales report CSV ──
+    // The fee matrix version (v1/v2) is selected by ship date, not order date.
+    // When available, this is the ground-truth date; otherwise we fall back to orderDate.
+    dateShippedToCustomer: timestamp('date_shipped_to_customer', { withTimezone: true }),
+
+    // ── Actual fee amounts from Takealot sales report CSV ──
+    // These are the REAL fees Takealot charged, used for fee reconciliation/auditing.
+    // null = not yet imported from CSV (we only have our calculated estimates).
+    grossSalesCents: integer('gross_sales_cents'),
+    actualSuccessFeeCents: integer('actual_success_fee_cents'),
+    actualFulfilmentFeeCents: integer('actual_fulfilment_fee_cents'),
+    courierCollectionFeeCents: integer('courier_collection_fee_cents'),
+    actualStockTransferFeeCents: integer('actual_stock_transfer_fee_cents'),
+    netSalesAmountCents: integer('net_sales_amount_cents'),
+
+    // ── Extra CSV fields ──
+    dailyDealPromo: varchar('daily_deal_promo', { length: 100 }),
+    shipmentName: varchar('shipment_name', { length: 255 }),
+    poNumber: varchar('po_number', { length: 100 }),
+
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
   },
@@ -189,12 +215,20 @@ export const feeSchedule = pgTable('fee_schedule', {
   id: uuid('id').primaryKey().defaultRandom(),
   feeType: varchar('fee_type', { length: 30 }).notNull(),
   category: varchar('category', { length: 255 }),
+  /**
+   * April 2026: Standard tier split into 4 category groups.
+   * Values: standard_a | standard_b | standard_c | standard_d
+   *       | large | oversize | bulky | extra_bulky
+   * null = not applicable (used for non-Standard size tiers)
+   */
+  categoryGroup: varchar('category_group', { length: 30 }),
   sizeTier: varchar('size_tier', { length: 30 }),
   weightTier: varchar('weight_tier', { length: 30 }),
   subcategory: varchar('subcategory', { length: 255 }),
   minRate: decimal('min_rate', { precision: 7, scale: 2 }),
   maxRate: decimal('max_rate', { precision: 7, scale: 2 }),
   flatRateCents: integer('flat_rate_cents'),
+  calculationVersion: varchar('calculation_version', { length: 20 }).default('v2025-07'),
   effectiveFrom: timestamp('effective_from', { mode: 'date' }).notNull(),
   effectiveTo: timestamp('effective_to', { mode: 'date' }),
   notes: text('notes'),
@@ -244,5 +278,62 @@ export const alerts = pgTable(
   },
   (table) => [
     index('alerts_seller_unread_idx').on(table.sellerId, table.isRead),
+  ]
+);
+
+// =============================================================================
+// sales_report_imports — Tracks seller CSV uploads for auditing/reconciliation
+// =============================================================================
+
+export const salesReportImports = pgTable(
+  'sales_report_imports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sellerId: uuid('seller_id')
+      .notNull()
+      .references(() => sellers.id, { onDelete: 'cascade' }),
+    fileName: varchar('file_name', { length: 255 }).notNull(),
+    rowCount: integer('row_count').notNull(),
+    matchedCount: integer('matched_count').default(0),
+    unmatchedCount: integer('unmatched_count').default(0),
+    updatedCount: integer('updated_count').default(0),
+    status: varchar('status', { length: 20 }).default('pending'), // pending | processing | complete | failed
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    index('sales_imports_seller_idx').on(table.sellerId),
+  ]
+);
+
+// =============================================================================
+// fee_discrepancies — Actual vs calculated fee differences flagged for auditing
+// =============================================================================
+
+export const feeDiscrepancies = pgTable(
+  'fee_discrepancies',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sellerId: uuid('seller_id')
+      .notNull()
+      .references(() => sellers.id, { onDelete: 'cascade' }),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    importId: uuid('import_id')
+      .references(() => salesReportImports.id, { onDelete: 'set null' }),
+    feeType: varchar('fee_type', { length: 30 }).notNull(), // success_fee | fulfilment_fee | stock_transfer_fee
+    actualCents: integer('actual_cents').notNull(),
+    calculatedCents: integer('calculated_cents').notNull(),
+    discrepancyCents: integer('discrepancy_cents').notNull(), // actual - calculated
+    discrepancyPct: decimal('discrepancy_pct', { precision: 7, scale: 2 }), // (actual-calc)/actual × 100
+    status: varchar('status', { length: 20 }).default('open'), // open | acknowledged | disputed
+    resolvedNote: text('resolved_note'), // seller's note when acknowledging/disputing
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }), // when status was changed
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    index('discrepancies_seller_idx').on(table.sellerId),
+    index('discrepancies_seller_status_idx').on(table.sellerId, table.status),
   ]
 );
