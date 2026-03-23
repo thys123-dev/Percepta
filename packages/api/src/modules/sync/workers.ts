@@ -20,6 +20,7 @@ import {
   calculateProfitsQueue,
   dailySyncQueue,
   processWebhookQueue,
+  emailDigestQueue,
 } from './queues.js';
 import { processInitialSync } from './jobs/initial-sync.js';
 import { processSyncOffers } from './jobs/sync-offers.js';
@@ -28,6 +29,7 @@ import { processDailySync } from './jobs/daily-sync.js';
 import { processCalculateProfits } from '../fees/profit-processor.js';
 import { processWebhook } from '../webhooks/processor.js';
 import { checkStorageWarnings } from '../alerts/alert-generator.js';
+import { processSendWeeklyDigest } from '../email/jobs/send-weekly-digest.js';
 
 const CONCURRENCY = 2; // Be gentle on Takealot API
 
@@ -182,10 +184,33 @@ export function startWorkers() {
     );
   });
 
-  // ---- Schedule nightly daily-sync for all sellers (02:00 AM) ----
-  scheduleDailySync();
+  // ---- email-digest worker (Week 9) ----
+  const emailDigestWorker = new Worker(
+    'email-digest',
+    processSendWeeklyDigest,
+    {
+      connection: redisConnection.duplicate(),
+      concurrency: 5,
+    }
+  );
 
-  console.info('✅ BullMQ workers started (initial-sync, sync-offers, sync-sales, calculate-profits, daily-sync, process-webhook)');
+  emailDigestWorker.on('completed', (job, result) => {
+    if (result.sent) {
+      console.info(`[email-digest] ✓ Seller ${job.data.sellerId}: weekly digest sent`);
+    } else {
+      console.info(`[email-digest] — Seller ${job.data.sellerId}: skipped (${result.reason})`);
+    }
+  });
+
+  emailDigestWorker.on('failed', (job, err) => {
+    console.error(`[email-digest] ✗ Seller ${job?.data.sellerId}: ${err.message}`);
+  });
+
+  // ---- Schedule nightly daily-sync (02:00 AM) + Sunday digest (08:00 AM) ----
+  scheduleDailySync();
+  scheduleWeeklyDigest();
+
+  console.info('✅ BullMQ workers started (initial-sync, sync-offers, sync-sales, calculate-profits, daily-sync, process-webhook, email-digest)');
 
   // Graceful shutdown
   async function shutdown() {
@@ -197,6 +222,7 @@ export function startWorkers() {
       calculateProfitsWorker.close(),
       dailySyncWorker.close(),
       processWebhookWorker.close(),
+      emailDigestWorker.close(),
     ]);
     console.info('[Workers] All workers shut down');
   }
@@ -211,6 +237,7 @@ export function startWorkers() {
     calculateProfitsWorker,
     dailySyncWorker,
     processWebhookWorker,
+    emailDigestWorker,
   };
 }
 
@@ -236,6 +263,27 @@ async function scheduleDailySync() {
   );
 
   console.info('[Workers] Nightly daily-sync scheduled at 02:00 AM');
+}
+
+/**
+ * Schedule the Sunday 8:00 AM weekly digest fan-out.
+ */
+async function scheduleWeeklyDigest() {
+  const existing = await emailDigestQueue.getRepeatableJobs();
+  for (const job of existing) {
+    await emailDigestQueue.removeRepeatableByKey(job.key);
+  }
+
+  await emailDigestQueue.add(
+    'weekly-digest-dispatcher',
+    { sellerId: '__all__' },
+    {
+      repeat: { pattern: '0 8 * * 0' }, // 8:00 AM every Sunday
+      jobId: 'weekly-digest-dispatcher',
+    }
+  );
+
+  console.info('[Workers] Weekly digest scheduled at 08:00 AM every Sunday');
 }
 
 /**

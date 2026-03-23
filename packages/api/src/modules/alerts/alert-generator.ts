@@ -16,6 +16,9 @@
 import { and, eq, gte, sql } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
 import { publishAlert } from '../sync/redis.js';
+import { sendEmail } from '../email/email-service.js';
+import { renderLossAlertHtml, renderLossAlertText } from '../email/templates/loss-alert.js';
+import { env } from '../../config/env.js';
 
 // Don't spam the same alert within 7 days
 const DEDUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -114,7 +117,7 @@ export async function checkLossMakerAlert(params: {
   const severity = params.marginPct < -10 ? 'critical' : 'warning';
   const lossAmount = (Math.abs(params.netProfitCents) / 100).toFixed(2);
 
-  await insertAlert({
+  const alertId = await insertAlert({
     sellerId: params.sellerId,
     alertType: 'loss_maker',
     severity,
@@ -123,6 +126,42 @@ export async function checkLossMakerAlert(params: {
     offerId: params.offerId,
     actionUrl: '/dashboard',
   });
+
+  // Send email if seller has loss alerts enabled (only when a new alert was created)
+  if (alertId) {
+    const [seller] = await db
+      .select({ email: schema.sellers.email, businessName: schema.sellers.businessName, emailLossAlerts: schema.sellers.emailLossAlerts })
+      .from(schema.sellers)
+      .where(eq(schema.sellers.id, params.sellerId));
+
+    if (seller?.emailLossAlerts) {
+      const dashboardUrl = env.FRONTEND_URL;
+      sendEmail({
+        to: seller.email,
+        subject: `Loss-Maker Alert: ${params.productTitle}`,
+        html: renderLossAlertHtml({
+          sellerName: seller.businessName ?? seller.email,
+          alertType: 'loss_maker',
+          productTitle: params.productTitle,
+          currentMarginPct: params.marginPct,
+          netProfitCents: params.netProfitCents,
+          dashboardUrl,
+          unsubscribeUrl: `${dashboardUrl}/dashboard/notifications?disable=emailLossAlerts`,
+        }),
+        text: renderLossAlertText({
+          sellerName: seller.businessName ?? seller.email,
+          alertType: 'loss_maker',
+          productTitle: params.productTitle,
+          currentMarginPct: params.marginPct,
+          netProfitCents: params.netProfitCents,
+          dashboardUrl,
+          unsubscribeUrl: `${dashboardUrl}/dashboard/notifications?disable=emailLossAlerts`,
+        }),
+      }).catch((err: Error) => {
+        console.error(`[alert-generator] Failed to send loss-maker email: ${err.message}`);
+      });
+    }
+  }
 }
 
 // =============================================================================
@@ -138,6 +177,7 @@ export async function checkMarginDropAlert(params: {
   offerId: number | null;
   productTitle: string;
   currentMarginPct: number;
+  netProfitCents: number;
 }): Promise<void> {
   if (params.offerId === null) return;
 
@@ -169,7 +209,7 @@ export async function checkMarginDropAlert(params: {
   const delta = params.currentMarginPct - avgMargin;
   if (delta >= -10) return; // drop is less than 10pp — no alert
 
-  await insertAlert({
+  const alertId = await insertAlert({
     sellerId: params.sellerId,
     alertType: 'margin_drop',
     severity: 'warning',
@@ -178,6 +218,53 @@ export async function checkMarginDropAlert(params: {
     offerId: params.offerId,
     actionUrl: '/dashboard',
   });
+
+  // Send email if seller has loss alerts enabled and margin is below their threshold
+  if (alertId) {
+    const [seller] = await db
+      .select({
+        email: schema.sellers.email,
+        businessName: schema.sellers.businessName,
+        emailLossAlerts: schema.sellers.emailLossAlerts,
+        emailMarginThreshold: schema.sellers.emailMarginThreshold,
+      })
+      .from(schema.sellers)
+      .where(eq(schema.sellers.id, params.sellerId));
+
+    const threshold = parseFloat(seller?.emailMarginThreshold ?? '15.00');
+
+    if (seller?.emailLossAlerts && params.currentMarginPct < threshold) {
+      const dashboardUrl = env.FRONTEND_URL;
+      sendEmail({
+        to: seller.email,
+        subject: `Margin Drop Alert: ${params.productTitle}`,
+        html: renderLossAlertHtml({
+          sellerName: seller.businessName ?? seller.email,
+          alertType: 'margin_drop',
+          productTitle: params.productTitle,
+          currentMarginPct: params.currentMarginPct,
+          netProfitCents: params.netProfitCents,
+          previousMarginPct: avgMargin,
+          thresholdPct: threshold,
+          dashboardUrl,
+          unsubscribeUrl: `${dashboardUrl}/dashboard/notifications?disable=emailLossAlerts`,
+        }),
+        text: renderLossAlertText({
+          sellerName: seller.businessName ?? seller.email,
+          alertType: 'margin_drop',
+          productTitle: params.productTitle,
+          currentMarginPct: params.currentMarginPct,
+          netProfitCents: params.netProfitCents,
+          previousMarginPct: avgMargin,
+          thresholdPct: threshold,
+          dashboardUrl,
+          unsubscribeUrl: `${dashboardUrl}/dashboard/notifications?disable=emailLossAlerts`,
+        }),
+      }).catch((err: Error) => {
+        console.error(`[alert-generator] Failed to send margin-drop email: ${err.message}`);
+      });
+    }
+  }
 }
 
 // =============================================================================

@@ -29,6 +29,13 @@ export const sellers = pgTable('sellers', {
   targetMarginPct: decimal('target_margin_pct', { precision: 5, scale: 2 }).default('25.00'),
   onboardingComplete: boolean('onboarding_complete').default(false),
   initialSyncStatus: varchar('initial_sync_status', { length: 20 }).default('pending'),
+
+  // Email notification preferences (Week 9)
+  emailWeeklyDigest: boolean('email_weekly_digest').default(true),
+  emailLossAlerts: boolean('email_loss_alerts').default(true),
+  emailMarginThreshold: decimal('email_margin_threshold', { precision: 5, scale: 2 }).default('15.00'),
+  lastWeeklyDigestAt: timestamp('last_weekly_digest_at', { withTimezone: true }),
+
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });

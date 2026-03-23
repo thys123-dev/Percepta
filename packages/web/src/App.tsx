@@ -6,6 +6,7 @@ import { AlertsPage } from './pages/AlertsPage';
 import { CogsPage } from './pages/CogsPage';
 import { FeeAuditPage } from './pages/FeeAuditPage';
 import { OnboardingPage } from './pages/OnboardingPage';
+import { NotificationsPage } from './pages/NotificationsPage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 
 function App() {
@@ -22,7 +23,7 @@ function App() {
         <Route path="alerts" element={<AlertsPage />} />
         <Route path="cogs" element={<CogsPage />} />
         <Route path="fee-audit" element={<FeeAuditPage />} />
-        {/* Future routes: /dashboard/products/:id, /dashboard/settings */}
+        <Route path="notifications" element={<NotificationsPage />} />
       </Route>
 
       {/* Redirect root to dashboard */}
