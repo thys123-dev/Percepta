@@ -119,8 +119,8 @@ export function DashboardLayout() {
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 p-6">
+        {/* Page content — extra bottom padding on mobile to clear the fixed bottom nav */}
+        <main className="flex-1 p-4 pb-20 sm:p-6 lg:pb-6">
           <Outlet />
         </main>
       </div>
