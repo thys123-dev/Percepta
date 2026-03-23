@@ -51,6 +51,7 @@ export function useDashboardSummary(params: PeriodParams) {
       api
         .get<DashboardSummaryData>('/dashboard/summary', { params })
         .then((r) => r.data),
+    staleTime: 5 * 60_000, // matches Redis TTL
   });
 }
 
@@ -109,6 +110,7 @@ export function useProducts(params: ProductsParams) {
       api
         .get<ProductsData>('/dashboard/products', { params })
         .then((r) => r.data),
+    staleTime: 5 * 60_000, // matches Redis TTL
   });
 }
 
@@ -175,5 +177,6 @@ export function useFeeSummary(params: PeriodParams) {
       api
         .get<FeeSummaryData>('/dashboard/fee-summary', { params })
         .then((r) => r.data),
+    staleTime: 5 * 60_000, // matches Redis TTL
   });
 }
