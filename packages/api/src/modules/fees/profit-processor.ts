@@ -9,7 +9,7 @@
  */
 
 import type { Job } from 'bullmq';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, isNotNull } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
 import {
   calculateFees,
@@ -65,34 +65,57 @@ export async function processCalculateProfits(
         )
       );
 
+    // Pre-fetch all offers for this batch in a single query (eliminates N+1)
+    const offerIds = [...new Set(orderRows.map((o) => o.offerIdNum).filter((id): id is number => id !== null))];
+    const offerRowsMap = new Map<number, {
+      title: string | null;
+      sellingPriceCents: number | null;
+      category: string | null;
+      volumeCm3: number | null;
+      weightGrams: number | null;
+      cogsCents: number | null;
+      cogsSource: string | null;
+      inboundCostCents: number | null;
+      stockCoverDays: number | null;
+    }>();
+
+    if (offerIds.length > 0) {
+      const offerRows = await db
+        .select({
+          offerId: schema.offers.offerId,
+          title: schema.offers.title,
+          sellingPriceCents: schema.offers.sellingPriceCents,
+          category: schema.offers.category,
+          volumeCm3: schema.offers.volumeCm3,
+          weightGrams: schema.offers.weightGrams,
+          cogsCents: schema.offers.cogsCents,
+          cogsSource: schema.offers.cogsSource,
+          inboundCostCents: schema.offers.inboundCostCents,
+          stockCoverDays: schema.offers.stockCoverDays,
+        })
+        .from(schema.offers)
+        .where(
+          and(
+            eq(schema.offers.sellerId, sellerId),
+            inArray(schema.offers.offerId, offerIds)
+          )
+        );
+
+      for (const row of offerRows) {
+        offerRowsMap.set(row.offerId, row);
+      }
+    }
+
     for (const order of orderRows) {
       try {
-        // Fetch the corresponding offer (product)
+        // Look up the corresponding offer from the pre-fetched map
         let offer: FeeOfferInput;
         let cogsPerUnitCents = 0;
         let inboundCostPerUnitCents = 0;
         let cogsIsEstimated = true;
 
         if (order.offerIdNum) {
-          const [offerRow] = await db
-            .select({
-              sellingPriceCents: schema.offers.sellingPriceCents,
-              category: schema.offers.category,
-              volumeCm3: schema.offers.volumeCm3,
-              weightGrams: schema.offers.weightGrams,
-              cogsCents: schema.offers.cogsCents,
-              cogsSource: schema.offers.cogsSource,
-              inboundCostCents: schema.offers.inboundCostCents,
-              stockCoverDays: schema.offers.stockCoverDays,
-            })
-            .from(schema.offers)
-            .where(
-              and(
-                eq(schema.offers.sellerId, sellerId),
-                eq(schema.offers.offerId, order.offerIdNum)
-              )
-            )
-            .limit(1);
+          const offerRow = offerRowsMap.get(order.offerIdNum);
 
           if (offerRow) {
             offer = {
@@ -209,23 +232,9 @@ export async function processCalculateProfits(
         }
 
         // ── Alert checks (fire-and-forget, don't block batch) ──
-        const productTitle = order.saleStatus ?? 'Unknown Product';
-        // Resolve product title from offer if available
+        // Resolve product title from pre-fetched offer map
         const alertTitle =
-          (order.offerIdNum
-            ? (await db
-                .select({ title: schema.offers.title })
-                .from(schema.offers)
-                .where(
-                  and(
-                    eq(schema.offers.sellerId, sellerId),
-                    eq(schema.offers.offerId, order.offerIdNum)
-                  )
-                )
-                .limit(1)
-                .then((r) => r[0]?.title)
-              )
-            : null) ?? 'Unknown Product';
+          (order.offerIdNum ? offerRowsMap.get(order.offerIdNum)?.title : null) ?? 'Unknown Product';
 
         // Loss-maker alert
         checkLossMakerAlert({

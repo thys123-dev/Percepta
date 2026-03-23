@@ -106,45 +106,48 @@ export async function dashboardRoutes(server: FastifyInstance) {
     const prevEnd   = new Date(start.getTime() - 1);
     const prevStart = new Date(prevEnd.getTime() - durationMs);
 
-    // Current period aggregation
-    const [current] = await db
-      .select({
-        totalRevenue:   sql<string>`COALESCE(SUM(${schema.profitCalculations.revenueCents}), 0)`,
-        totalFees:      sql<string>`COALESCE(SUM(${schema.profitCalculations.totalFeesCents}), 0)`,
-        totalCogs:      sql<string>`COALESCE(SUM(${schema.profitCalculations.cogsCents}), 0)`,
-        totalInbound:   sql<string>`COALESCE(SUM(${schema.profitCalculations.inboundCostCents}), 0)`,
-        totalProfit:    sql<string>`COALESCE(SUM(${schema.profitCalculations.netProfitCents}), 0)`,
-        orderCount:     sql<number>`COUNT(*)::int`,
-        productCount:   sql<number>`COUNT(DISTINCT ${schema.profitCalculations.offerId})::int`,
-        lossMakerCount: sql<number>`COALESCE(SUM(CASE WHEN ${schema.profitCalculations.isProfitable} = false THEN 1 ELSE 0 END), 0)::int`,
-      })
-      .from(schema.profitCalculations)
-      .innerJoin(schema.orders, eq(schema.profitCalculations.orderId, schema.orders.id))
-      .where(
-        and(
-          eq(schema.profitCalculations.sellerId, sellerId),
-          gte(schema.orders.orderDate, start),
-          lte(schema.orders.orderDate, end),
-          notInArray(schema.orders.saleStatus, EXCLUDED_STATUSES)
-        )
-      );
+    // Run current + previous period queries in parallel
+    const [currentRows, prevRows] = await Promise.all([
+      db
+        .select({
+          totalRevenue:   sql<string>`COALESCE(SUM(${schema.profitCalculations.revenueCents}), 0)`,
+          totalFees:      sql<string>`COALESCE(SUM(${schema.profitCalculations.totalFeesCents}), 0)`,
+          totalCogs:      sql<string>`COALESCE(SUM(${schema.profitCalculations.cogsCents}), 0)`,
+          totalInbound:   sql<string>`COALESCE(SUM(${schema.profitCalculations.inboundCostCents}), 0)`,
+          totalProfit:    sql<string>`COALESCE(SUM(${schema.profitCalculations.netProfitCents}), 0)`,
+          orderCount:     sql<number>`COUNT(*)::int`,
+          productCount:   sql<number>`COUNT(DISTINCT ${schema.profitCalculations.offerId})::int`,
+          lossMakerCount: sql<number>`COALESCE(SUM(CASE WHEN ${schema.profitCalculations.isProfitable} = false THEN 1 ELSE 0 END), 0)::int`,
+        })
+        .from(schema.profitCalculations)
+        .innerJoin(schema.orders, eq(schema.profitCalculations.orderId, schema.orders.id))
+        .where(
+          and(
+            eq(schema.profitCalculations.sellerId, sellerId),
+            gte(schema.orders.orderDate, start),
+            lte(schema.orders.orderDate, end),
+            notInArray(schema.orders.saleStatus, EXCLUDED_STATUSES)
+          )
+        ),
+      db
+        .select({
+          totalRevenue: sql<string>`COALESCE(SUM(${schema.profitCalculations.revenueCents}), 0)`,
+          totalProfit:  sql<string>`COALESCE(SUM(${schema.profitCalculations.netProfitCents}), 0)`,
+        })
+        .from(schema.profitCalculations)
+        .innerJoin(schema.orders, eq(schema.profitCalculations.orderId, schema.orders.id))
+        .where(
+          and(
+            eq(schema.profitCalculations.sellerId, sellerId),
+            gte(schema.orders.orderDate, prevStart),
+            lte(schema.orders.orderDate, prevEnd),
+            notInArray(schema.orders.saleStatus, EXCLUDED_STATUSES)
+          )
+        ),
+    ]);
 
-    // Previous period for trend
-    const [prev] = await db
-      .select({
-        totalRevenue: sql<string>`COALESCE(SUM(${schema.profitCalculations.revenueCents}), 0)`,
-        totalProfit:  sql<string>`COALESCE(SUM(${schema.profitCalculations.netProfitCents}), 0)`,
-      })
-      .from(schema.profitCalculations)
-      .innerJoin(schema.orders, eq(schema.profitCalculations.orderId, schema.orders.id))
-      .where(
-        and(
-          eq(schema.profitCalculations.sellerId, sellerId),
-          gte(schema.orders.orderDate, prevStart),
-          lte(schema.orders.orderDate, prevEnd),
-          notInArray(schema.orders.saleStatus, EXCLUDED_STATUSES)
-        )
-      );
+    const [current] = currentRows;
+    const [prev] = prevRows;
 
     const totalRevenue = Number(current?.totalRevenue ?? 0);
     const totalProfit  = Number(current?.totalProfit ?? 0);
