@@ -17,7 +17,7 @@ const loginSchema = z.object({
 
 export async function authRoutes(server: FastifyInstance) {
   // POST /api/auth/register
-  server.post('/register', async (request, reply) => {
+  server.post('/register', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = registerSchema.parse(request.body);
 
     // Check if email already exists
@@ -68,7 +68,7 @@ export async function authRoutes(server: FastifyInstance) {
   });
 
   // POST /api/auth/login
-  server.post('/login', async (request, reply) => {
+  server.post('/login', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = loginSchema.parse(request.body);
 
     const [seller] = await db

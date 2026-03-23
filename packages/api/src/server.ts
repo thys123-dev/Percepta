@@ -1,6 +1,8 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
+import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
 import { env } from './config/env.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { sellerRoutes } from './modules/sellers/routes.js';
@@ -12,6 +14,9 @@ import { salesReportRoutes } from './modules/fees/sales-report-routes.js';
 import { emailRoutes } from './modules/email/routes.js';
 import { startWorkers } from './modules/sync/workers.js';
 import { setupSocketIO } from './modules/realtime/socket.js';
+import { db } from './db/index.js';
+import { sql } from 'drizzle-orm';
+import { redisConnection } from './modules/sync/redis.js';
 
 export async function buildServer() {
   const server = Fastify({
@@ -22,6 +27,7 @@ export async function buildServer() {
           ? { target: 'pino-pretty', options: { colorize: true } }
           : undefined,
     },
+    bodyLimit: 1_048_576, // 1 MB default
   });
 
   // Plugins
@@ -30,16 +36,46 @@ export async function buildServer() {
     credentials: true,
   });
 
+  await server.register(helmet, {
+    contentSecurityPolicy: env.NODE_ENV === 'production' ? undefined : false,
+  });
+
+  await server.register(rateLimit, {
+    max: 100,
+    timeWindow: '1 minute',
+  });
+
   await server.register(jwt, {
     secret: env.JWT_SECRET,
   });
 
-  // Health check
-  server.get('/api/health', async () => ({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    version: '0.1.0',
-  }));
+  // Health check — verifies DB + Redis connectivity (no auth)
+  server.get('/api/health', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (_request, reply) => {
+    const checks: Record<string, string> = {};
+
+    try {
+      await db.execute(sql`SELECT 1`);
+      checks.database = 'ok';
+    } catch {
+      checks.database = 'error';
+    }
+
+    try {
+      const pong = await redisConnection.ping();
+      checks.redis = pong === 'PONG' ? 'ok' : 'error';
+    } catch {
+      checks.redis = 'error';
+    }
+
+    const healthy = Object.values(checks).every((v) => v === 'ok');
+
+    return reply.status(healthy ? 200 : 503).send({
+      status: healthy ? 'ok' : 'degraded',
+      timestamp: new Date().toISOString(),
+      version: '0.1.0',
+      checks,
+    });
+  });
 
   // Routes
   await server.register(authRoutes, { prefix: '/api/auth' });

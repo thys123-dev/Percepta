@@ -11,8 +11,9 @@
 import { Worker } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
-import { redisConnection } from './redis.js';
+import { redisConnection, progressPublisher } from './redis.js';
 import { publishProfitUpdate } from './redis.js';
+import { pool } from '../../db/index.js';
 import {
   initialSyncQueue,
   syncOffersQueue,
@@ -215,6 +216,8 @@ export function startWorkers() {
   // Graceful shutdown
   async function shutdown() {
     console.info('[Workers] Shutting down gracefully...');
+
+    // 1. Close all BullMQ workers (drains active jobs)
     await Promise.all([
       initialSyncWorker.close(),
       syncOffersWorker.close(),
@@ -225,6 +228,17 @@ export function startWorkers() {
       emailDigestWorker.close(),
     ]);
     console.info('[Workers] All workers shut down');
+
+    // 2. Close Redis connections
+    await Promise.all([
+      redisConnection.quit(),
+      progressPublisher.quit(),
+    ]);
+    console.info('[Workers] Redis connections closed');
+
+    // 3. Close database pool
+    await pool.end();
+    console.info('[Workers] Database pool closed');
   }
 
   process.on('SIGTERM', () => { void shutdown(); });

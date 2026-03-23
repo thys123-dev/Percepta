@@ -74,7 +74,7 @@ export async function salesReportRoutes(server: FastifyInstance) {
   // ---------------------------------------------------------------------------
   // POST /import — Parse, preview, or commit a sales report CSV
   // ---------------------------------------------------------------------------
-  server.post('/import', { preHandler: [authenticate] }, async (request, reply) => {
+  server.post('/import', { preHandler: [authenticate], bodyLimit: 10_485_760 }, async (request, reply) => {
     const { sellerId } = request.user as { sellerId: string };
     const { mode, csvText, fileName } = salesReportImportSchema.parse(request.body);
 
