@@ -27,6 +27,8 @@ const envSchema = z.object({
 
   SENTRY_DSN: z.string().optional(),
 
+  DEMO_MODE: z.coerce.boolean().default(false),
+
   FRONTEND_URL: z.string().default('http://localhost:5173'),
 });
 

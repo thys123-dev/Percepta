@@ -1,0 +1,13 @@
+{
+  "event_type": "Offer Updated",
+  "delivery_id": "demo-webhook-003",
+  "data": {
+    "offer_id": 100004,
+    "tsin": 200004,
+    "sku": "KG-EARBUDS-PRO",
+    "product_title": "Wireless Earbuds Pro ZA",
+    "selling_price": 849.00,
+    "status": "Buyable",
+    "category": "Electronic Accessories"
+  }
+}
