@@ -124,7 +124,21 @@ export async function dashboardRoutes(server: FastifyInstance) {
           totalProfit:    sql<string>`COALESCE(SUM(${schema.profitCalculations.netProfitCents}), 0)`,
           orderCount:     sql<number>`COUNT(*)::int`,
           productCount:   sql<number>`COUNT(DISTINCT ${schema.profitCalculations.offerId})::int`,
-          lossMakerCount: sql<number>`COALESCE(SUM(CASE WHEN ${schema.profitCalculations.isProfitable} = false THEN 1 ELSE 0 END), 0)::int`,
+          lossMakerCount: sql<number>`(
+            SELECT COUNT(*)::int
+            FROM (
+              SELECT pc2.offer_id
+              FROM profit_calculations pc2
+              INNER JOIN orders o2 ON pc2.order_id = o2.id
+              WHERE pc2.seller_id = ${sellerId}
+                AND o2.order_date >= ${start}
+                AND o2.order_date <= ${end}
+                AND o2.sale_status NOT IN (${sql.join(EXCLUDED_STATUSES.map(s => sql`${s}`), sql`, `)})
+                AND pc2.offer_id IS NOT NULL
+              GROUP BY pc2.offer_id
+              HAVING SUM(pc2.net_profit_cents) < 0
+            ) loss_makers
+          )`,
         })
         .from(schema.profitCalculations)
         .innerJoin(schema.orders, eq(schema.profitCalculations.orderId, schema.orders.id))
@@ -362,9 +376,30 @@ export async function dashboardRoutes(server: FastifyInstance) {
 
       const qty = row.quantity ?? 1;
       const unitPrice = row.unitPriceCents ?? Math.round((row.sellingPriceCents ?? 0) / qty);
+
+      // All fee/cost/profit values stored in DB are order totals (per-unit × qty).
+      // Divide back to per-unit so the waterfall display is consistent with the
+      // unit selling price shown at the start of the breakdown.
+      const perUnit = (total: number) => Math.round(total / qty);
+
+      const unitSuccessFeeCents          = perUnit(Number(row.successFeeCents ?? 0));
+      const unitFulfilmentFeeCents       = perUnit(Number(row.fulfilmentFeeCents ?? 0));
+      const unitIbtPenaltyCents          = perUnit(Number(row.ibtPenaltyCents ?? 0));
+      const unitStorageFeeAllocatedCents = perUnit(Number(row.storageFeeAllocatedCents ?? 0));
+      const unitTotalFeeCents            = perUnit(Number(row.totalFeeCents ?? 0));   // incl. VAT
+      const unitCogsCents                = perUnit(Number(row.cogsCents ?? 0));
+      const unitInboundCostCents         = perUnit(Number(row.inboundCostCents ?? 0));
+      const unitNetProfitCents           = perUnit(row.netProfitCents);
+      const unitRevenueCents             = unitPrice; // revenue per unit = unit price
+
+      // Individual fee columns are stored excl. VAT; totalFeeCents is incl. VAT.
+      // The difference is the VAT component — show it explicitly so the waterfall balances.
+      const unitFeesExclVatCents = unitSuccessFeeCents + unitFulfilmentFeeCents + unitIbtPenaltyCents + unitStorageFeeAllocatedCents;
+      const unitVatOnFeesCents   = unitTotalFeeCents - unitFeesExclVatCents;
+
       const marginPct =
-        row.revenueCents > 0
-          ? Math.round((row.netProfitCents / row.revenueCents) * 10000) / 100
+        unitRevenueCents > 0
+          ? Math.round((unitNetProfitCents / unitRevenueCents) * 10000) / 100
           : 0;
 
       return {
@@ -376,16 +411,18 @@ export async function dashboardRoutes(server: FastifyInstance) {
           cogsIsEstimated:          row.cogsIsEstimated,
           isIbt:                    row.isIbt,
           orderDate:                row.orderDate,
+          quantity:                 qty,
           unitSellingPriceCents:    unitPrice,
-          successFeeCents:          Number(row.successFeeCents ?? 0),
-          fulfilmentFeeCents:       Number(row.fulfilmentFeeCents ?? 0),
-          ibtPenaltyCents:          Number(row.ibtPenaltyCents ?? 0),
-          storageFeeAllocatedCents: Number(row.storageFeeAllocatedCents ?? 0),
-          totalFeeCents:            Number(row.totalFeeCents ?? 0),
-          cogsCents:                Number(row.cogsCents ?? 0),
-          inboundCostCents:         Number(row.inboundCostCents ?? 0),
-          netProfitCents:           row.netProfitCents,
-          revenueCents:             row.revenueCents,
+          successFeeCents:          unitSuccessFeeCents,
+          fulfilmentFeeCents:       unitFulfilmentFeeCents,
+          ibtPenaltyCents:          unitIbtPenaltyCents,
+          storageFeeAllocatedCents: unitStorageFeeAllocatedCents,
+          vatOnFeesCents:           unitVatOnFeesCents,
+          totalFeeCents:            unitTotalFeeCents,
+          cogsCents:                unitCogsCents,
+          inboundCostCents:         unitInboundCostCents,
+          netProfitCents:           unitNetProfitCents,
+          revenueCents:             unitRevenueCents,
           marginPct,
         },
       };

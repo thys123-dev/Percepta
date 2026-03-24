@@ -397,9 +397,15 @@ export async function sellerRoutes(server: FastifyInstance) {
 
     const updates = profileSchema.parse(request.body);
 
+    // Drizzle maps `decimal` columns to `string`, so convert the number from Zod
+    const { targetMarginPct, ...rest } = updates;
     const [updated] = await db
       .update(schema.sellers)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({
+        ...rest,
+        ...(targetMarginPct !== undefined && { targetMarginPct: targetMarginPct.toString() }),
+        updatedAt: new Date(),
+      })
       .where(eq(schema.sellers.id, sellerId))
       .returning({
         businessName: schema.sellers.businessName,

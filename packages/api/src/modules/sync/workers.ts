@@ -9,6 +9,7 @@
  */
 
 import { Worker } from 'bullmq';
+import type { ConnectionOptions } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
 import { redisConnection, progressPublisher, cacheInvalidate } from './redis.js';
@@ -40,7 +41,7 @@ export function startWorkers() {
     'initial-sync',
     processInitialSync,
     {
-      connection: redisConnection.duplicate(),
+      connection: redisConnection.duplicate() as unknown as ConnectionOptions,
       concurrency: CONCURRENCY,
     }
   );
@@ -60,7 +61,7 @@ export function startWorkers() {
     'sync-offers',
     processSyncOffers,
     {
-      connection: redisConnection.duplicate(),
+      connection: redisConnection.duplicate() as unknown as ConnectionOptions,
       concurrency: CONCURRENCY,
     }
   );
@@ -78,7 +79,7 @@ export function startWorkers() {
     'sync-sales',
     processSyncSales,
     {
-      connection: redisConnection.duplicate(),
+      connection: redisConnection.duplicate() as unknown as ConnectionOptions,
       concurrency: CONCURRENCY,
     }
   );
@@ -96,7 +97,7 @@ export function startWorkers() {
     'calculate-profits',
     processCalculateProfits,
     {
-      connection: redisConnection.duplicate(),
+      connection: redisConnection.duplicate() as unknown as ConnectionOptions,
       concurrency: 5,
     }
   );
@@ -139,7 +140,7 @@ export function startWorkers() {
     'daily-sync',
     processDailySync,
     {
-      connection: redisConnection.duplicate(),
+      connection: redisConnection.duplicate() as unknown as ConnectionOptions,
       concurrency: 3,
     }
   );
@@ -173,7 +174,7 @@ export function startWorkers() {
     'process-webhook',
     processWebhook,
     {
-      connection: redisConnection.duplicate(),
+      connection: redisConnection.duplicate() as unknown as ConnectionOptions,
       concurrency: 10,
     }
   );
@@ -195,7 +196,7 @@ export function startWorkers() {
     'email-digest',
     processSendWeeklyDigest,
     {
-      connection: redisConnection.duplicate(),
+      connection: redisConnection.duplicate() as unknown as ConnectionOptions,
       concurrency: 5,
     }
   );

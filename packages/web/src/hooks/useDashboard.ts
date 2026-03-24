@@ -126,11 +126,13 @@ export interface ProductFeesData {
   cogsIsEstimated: boolean;
   isIbt: boolean;
   orderDate: string;
+  quantity: number;
   unitSellingPriceCents: number;
   successFeeCents: number;
   fulfilmentFeeCents: number;
   ibtPenaltyCents: number;
   storageFeeAllocatedCents: number;
+  vatOnFeesCents: number;
   totalFeeCents: number;
   cogsCents: number;
   inboundCostCents: number;
