@@ -185,6 +185,46 @@ export async function dashboardRoutes(server: FastifyInstance) {
         ? Math.round((prevProfit / prevRevenue) * 10000) / 100
         : 0;
 
+    // Check if seller has imported account transactions (reconciled data)
+    const [acctImportCheck] = await db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(schema.accountTransactionImports)
+      .where(
+        and(
+          eq(schema.accountTransactionImports.sellerId, sellerId),
+          eq(schema.accountTransactionImports.status, 'complete')
+        )
+      );
+    const reconciled = (acctImportCheck?.count ?? 0) > 0;
+
+    // Fetch overhead costs from seller_costs for the period
+    let overheadCosts: Array<{ costType: string; totalInclVatCents: number; transactionCount: number }> = [];
+    if (reconciled) {
+      const costs = await db
+        .select({
+          costType:           schema.sellerCosts.costType,
+          totalInclVatCents:  sql<string>`SUM(${schema.sellerCosts.totalInclVatCents})`,
+          transactionCount:   sql<string>`SUM(${schema.sellerCosts.transactionCount})`,
+        })
+        .from(schema.sellerCosts)
+        .where(
+          and(
+            eq(schema.sellerCosts.sellerId, sellerId),
+            gte(schema.sellerCosts.month, start.toISOString().slice(0, 10)),
+            lte(schema.sellerCosts.month, end.toISOString().slice(0, 10))
+          )
+        )
+        .groupBy(schema.sellerCosts.costType);
+
+      overheadCosts = costs.map((c) => ({
+        costType:          c.costType,
+        totalInclVatCents: Number(c.totalInclVatCents ?? 0),
+        transactionCount:  Number(c.transactionCount ?? 0),
+      }));
+    }
+
+    const totalOverheadCents = overheadCosts.reduce((sum, c) => sum + c.totalInclVatCents, 0);
+
     const result = {
       period: { startDate: start.toISOString(), endDate: end.toISOString(), label: period },
       totalRevenueCents:  totalRevenue,
@@ -196,6 +236,9 @@ export async function dashboardRoutes(server: FastifyInstance) {
       orderCount:         Number(current?.orderCount ?? 0),
       productCount:       Number(current?.productCount ?? 0),
       lossMakerCount:     Number(current?.lossMakerCount ?? 0),
+      reconciled,
+      overheadCosts,
+      totalOverheadCents,
       trends: {
         revenueDelta: calcDelta(totalRevenue, prevRevenue),
         profitDelta:  calcDelta(totalProfit, prevProfit),

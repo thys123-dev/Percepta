@@ -4,7 +4,9 @@ import {
   varchar,
   boolean,
   integer,
+  bigint,
   timestamp,
+  date,
   text,
   decimal,
   jsonb,
@@ -142,6 +144,10 @@ export const orders = pgTable(
     dailyDealPromo: varchar('daily_deal_promo', { length: 100 }),
     shipmentName: varchar('shipment_name', { length: 255 }),
     poNumber: varchar('po_number', { length: 100 }),
+
+    // ── Reversal tracking (populated from Account Transactions CSV) ──
+    reversalAmountCents: integer('reversal_amount_cents'),
+    hasReversal: boolean('has_reversal').default(false),
 
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
@@ -342,5 +348,94 @@ export const feeDiscrepancies = pgTable(
   (table) => [
     index('discrepancies_seller_idx').on(table.sellerId),
     index('discrepancies_seller_status_idx').on(table.sellerId, table.status),
+  ]
+);
+
+// =============================================================================
+// account_transaction_imports — Tracks Account Transactions CSV uploads
+// =============================================================================
+
+export const accountTransactionImports = pgTable(
+  'account_transaction_imports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sellerId: uuid('seller_id')
+      .notNull()
+      .references(() => sellers.id, { onDelete: 'cascade' }),
+    fileName: varchar('file_name', { length: 255 }).notNull(),
+    rowCount: integer('row_count').notNull(),
+    insertedCount: integer('inserted_count').default(0),
+    duplicateCount: integer('duplicate_count').default(0),
+    ordersUpdated: integer('orders_updated').default(0),
+    status: varchar('status', { length: 20 }).default('pending'),
+    errorMessage: text('error_message'),
+    dateRangeStart: timestamp('date_range_start', { withTimezone: true }),
+    dateRangeEnd: timestamp('date_range_end', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    index('acct_imports_seller_idx').on(table.sellerId),
+  ]
+);
+
+// =============================================================================
+// account_transactions — Individual rows from Account Transactions CSV
+// =============================================================================
+
+export const accountTransactions = pgTable(
+  'account_transactions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sellerId: uuid('seller_id')
+      .notNull()
+      .references(() => sellers.id, { onDelete: 'cascade' }),
+    importId: uuid('import_id')
+      .references(() => accountTransactionImports.id, { onDelete: 'set null' }),
+    transactionDate: timestamp('transaction_date', { withTimezone: true }).notNull(),
+    transactionType: varchar('transaction_type', { length: 50 }).notNull(),
+    transactionId: bigint('transaction_id', { mode: 'number' }).notNull(),
+    description: text('description'),
+    referenceType: varchar('reference_type', { length: 50 }),
+    reference: text('reference'),
+    orderId: integer('order_id'),
+    exclVatCents: integer('excl_vat_cents').notNull(),
+    vatCents: integer('vat_cents').notNull(),
+    inclVatCents: integer('incl_vat_cents').notNull(),
+    balanceCents: bigint('balance_cents', { mode: 'number' }),
+    sku: varchar('sku', { length: 255 }),
+    productTitle: varchar('product_title', { length: 500 }),
+    disbursementCycle: timestamp('disbursement_cycle', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('acct_txn_seller_txnid_idx').on(table.sellerId, table.transactionId),
+    index('acct_txn_seller_type_idx').on(table.sellerId, table.transactionType),
+    index('acct_txn_seller_date_idx').on(table.sellerId, table.transactionDate),
+    index('acct_txn_seller_order_idx').on(table.sellerId, table.orderId),
+  ]
+);
+
+// =============================================================================
+// seller_costs — Monthly aggregated non-order costs
+// =============================================================================
+
+export const sellerCosts = pgTable(
+  'seller_costs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sellerId: uuid('seller_id')
+      .notNull()
+      .references(() => sellers.id, { onDelete: 'cascade' }),
+    month: date('month').notNull(),
+    costType: varchar('cost_type', { length: 50 }).notNull(),
+    totalExclVatCents: integer('total_excl_vat_cents').notNull().default(0),
+    totalVatCents: integer('total_vat_cents').notNull().default(0),
+    totalInclVatCents: integer('total_incl_vat_cents').notNull().default(0),
+    transactionCount: integer('transaction_count').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('seller_costs_unique_idx').on(table.sellerId, table.month, table.costType),
   ]
 );

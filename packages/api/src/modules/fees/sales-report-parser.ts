@@ -32,6 +32,14 @@
  *  19  Date Shipped to Customer
  */
 
+import {
+  splitCsvLine,
+  parseRandsToCents,
+  parseDate,
+  parseDateOrNull,
+  parseIntOrNull,
+} from './csv-utils.js';
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -199,85 +207,3 @@ export function parseSalesReportCsv(csvText: string): SalesReportParseResult {
   return { rows, errors, totalLines: lines.length };
 }
 
-// =============================================================================
-// Helpers
-// =============================================================================
-
-/**
- * Split a CSV line respecting quoted fields (handles commas inside quotes).
- */
-function splitCsvLine(line: string): string[] {
-  const fields: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]!;
-
-    if (inQuotes) {
-      if (ch === '"') {
-        // Check for escaped quote ("" → ")
-        if (i + 1 < line.length && line[i + 1] === '"') {
-          current += '"';
-          i++; // skip next quote
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        current += ch;
-      }
-    } else {
-      if (ch === '"') {
-        inQuotes = true;
-      } else if (ch === ',') {
-        fields.push(current);
-        current = '';
-      } else {
-        current += ch;
-      }
-    }
-  }
-
-  fields.push(current);
-  return fields;
-}
-
-/**
- * Parse a Rand amount (e.g. "150.00", "1 250.50", "-42.30") to integer cents.
- * Returns 0 for empty/unparseable values.
- */
-function parseRandsToCents(value: string): number {
-  if (!value || value.trim() === '' || value.trim() === '-') return 0;
-
-  // Remove currency symbol, spaces (thousands separator), and trim
-  const cleaned = value.replace(/[R\s]/g, '').replace(/,/g, '');
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? 0 : Math.round(num * 100);
-}
-
-/**
- * Parse a date string in common Takealot formats:
- *   "2026-03-18" or "2026/03/18" or "18 Mar 2026" or "03/18/2026"
- */
-function parseDate(value: string): Date {
-  if (!value || value.trim() === '') {
-    return new Date(); // fallback to now
-  }
-  const d = new Date(value.trim());
-  if (isNaN(d.getTime())) {
-    throw new Error(`Invalid date: "${value}"`);
-  }
-  return d;
-}
-
-function parseDateOrNull(value: string): Date | null {
-  if (!value || value.trim() === '') return null;
-  const d = new Date(value.trim());
-  return isNaN(d.getTime()) ? null : d;
-}
-
-function parseIntOrNull(value: string): number | null {
-  if (!value || value.trim() === '') return null;
-  const n = parseInt(value.trim(), 10);
-  return isNaN(n) ? null : n;
-}

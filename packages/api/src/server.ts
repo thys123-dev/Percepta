@@ -22,6 +22,7 @@ import { dashboardRoutes } from './modules/dashboard/routes.js';
 import { alertRoutes } from './modules/alerts/routes.js';
 import { syncRoutes } from './modules/sync/routes.js';
 import { salesReportRoutes } from './modules/fees/sales-report-routes.js';
+import { accountTransactionRoutes } from './modules/fees/account-transaction-routes.js';
 import { emailRoutes } from './modules/email/routes.js';
 import { startWorkers } from './modules/sync/workers.js';
 import { setupSocketIO } from './modules/realtime/socket.js';
@@ -96,6 +97,7 @@ export async function buildServer() {
   await server.register(dashboardRoutes, { prefix: '/api/dashboard' });
   await server.register(alertRoutes, { prefix: '/api/alerts' });
   await server.register(salesReportRoutes, { prefix: '/api/sales-report' });
+  await server.register(accountTransactionRoutes, { prefix: '/api/account-transactions' });
   await server.register(emailRoutes, { prefix: '/api/email' });
 
   return server;

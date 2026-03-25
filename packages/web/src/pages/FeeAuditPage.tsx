@@ -1,20 +1,23 @@
 import { useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import { SalesReportUpload } from '../components/fees/SalesReportUpload';
+import { AccountTransactionUpload } from '../components/fees/AccountTransactionUpload';
 import { FeeDiscrepancyTable } from '../components/fees/FeeDiscrepancyTable';
 import { ImportHistoryList } from '../components/fees/ImportHistoryList';
+import { AccountTransactionHistory } from '../components/fees/AccountTransactionHistory';
 import { ProductDiscrepancyTable } from '../components/fees/ProductDiscrepancyTable';
 import { DiscrepancyCharts } from '../components/fees/DiscrepancyCharts';
 import { useExportDiscrepancies } from '../hooks/useSalesReport';
 
-type Tab = 'upload' | 'discrepancies' | 'by-product' | 'insights' | 'history';
+type Tab = 'upload' | 'acct-transactions' | 'discrepancies' | 'by-product' | 'insights' | 'history';
 
 export function FeeAuditPage() {
   const [tab, setTab] = useState<Tab>('upload');
   const exportMutation = useExportDiscrepancies();
 
   const tabs: Array<{ key: Tab; label: string }> = [
-    { key: 'upload', label: 'Import Sales Report' },
+    { key: 'upload', label: 'Sales Report' },
+    { key: 'acct-transactions', label: 'Account Transactions' },
     { key: 'discrepancies', label: 'Fee Discrepancies' },
     { key: 'by-product', label: 'By Product' },
     { key: 'insights', label: 'Insights' },
@@ -28,7 +31,7 @@ export function FeeAuditPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Fee Audit</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Upload your Takealot sales report CSV to compare actual fees against calculated estimates and identify overcharges.
+            Import your Takealot reports to compare fees, track reversals, and see your complete financial picture.
           </p>
         </div>
 
@@ -70,10 +73,22 @@ export function FeeAuditPage() {
 
       {/* Tab content */}
       {tab === 'upload' && <SalesReportUpload onImportComplete={() => setTab('discrepancies')} />}
+      {tab === 'acct-transactions' && <AccountTransactionUpload />}
       {tab === 'discrepancies' && <FeeDiscrepancyTable />}
       {tab === 'by-product' && <ProductDiscrepancyTable />}
       {tab === 'insights' && <DiscrepancyCharts />}
-      {tab === 'history' && <ImportHistoryList />}
+      {tab === 'history' && (
+        <div className="space-y-8">
+          <div>
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Sales Report Imports</h3>
+            <ImportHistoryList />
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Account Transaction Imports</h3>
+            <AccountTransactionHistory />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
