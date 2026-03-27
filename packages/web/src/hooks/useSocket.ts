@@ -29,7 +29,7 @@ export function useSocket() {
 
   useEffect(() => {
     mountedRef.current = true;
-    const token = localStorage.getItem('auth_token');
+    const token = localStorage.getItem('percepta_token');
 
     if (!token) {
       setError('No auth token');

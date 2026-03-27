@@ -129,6 +129,11 @@ export function startWorkers() {
     cacheInvalidate(`dashboard:${job.data.sellerId}:*`).catch((err: Error) => {
       console.error(`[calculate-profits] Failed to invalidate dashboard cache: ${err.message}`);
     });
+
+    // Invalidate revenue-target cache (keyed separately from dashboard:*)
+    cacheInvalidate(`revenue-target:${job.data.sellerId}`).catch((err: Error) => {
+      console.error(`[calculate-profits] Failed to invalidate revenue-target cache: ${err.message}`);
+    });
   });
 
   calculateProfitsWorker.on('failed', (job, err) => {

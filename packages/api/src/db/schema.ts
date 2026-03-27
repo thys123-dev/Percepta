@@ -266,6 +266,12 @@ export const webhookEvents = pgTable(
   },
   (table) => [
     index('webhook_unprocessed_idx').on(table.processed),
+    // Dedup at the DB layer: same seller + delivery_id can only be logged once.
+    // BullMQ also deduplicates via jobId, but this prevents duplicate DB rows
+    // if the queue is bypassed or the same delivery arrives before processing completes.
+    uniqueIndex('webhook_events_seller_delivery_idx')
+      .on(table.sellerId, table.deliveryId)
+      .where(sql`delivery_id IS NOT NULL`),
   ]
 );
 

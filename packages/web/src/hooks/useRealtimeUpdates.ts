@@ -46,7 +46,7 @@ export function useRealtimeUpdates() {
       // Invalidate dashboard and product table queries
       void queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       void queryClient.invalidateQueries({ queryKey: ['products'] });
-      void queryClient.invalidateQueries({ queryKey: ['profit-calculations'] });
+      void queryClient.invalidateQueries({ queryKey: ['revenue-target'] });
     },
     [queryClient]
   );

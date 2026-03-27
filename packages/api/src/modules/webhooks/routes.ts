@@ -25,6 +25,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
 import { processWebhookQueue } from '../sync/queues.js';
+import { env } from '../../config/env.js';
 
 const SIGNATURE_HEADER = 'x-takealot-signature';
 
@@ -89,11 +90,12 @@ export async function webhookRoutes(server: FastifyInstance) {
           return reply.status(401).send({ error: 'Invalid signature' });
         }
       } else if (seller.webhookSecret && !signature) {
-        // Secret configured but no signature sent — reject
         server.log.warn(`[Webhook] Missing signature header for seller ${sellerId}`);
         return reply.status(401).send({ error: 'Missing signature' });
+      } else if (!seller.webhookSecret && env.NODE_ENV === 'production') {
+        server.log.warn(`[Webhook] Rejected: no webhook secret configured for seller ${sellerId} (production mode)`);
+        return reply.status(200).send({ received: true });
       }
-      // If no secret configured, skip verification (initial setup phase)
 
       // --- Step 4: Extract event metadata ---
       const eventType = payload.event_type as string | undefined;
@@ -118,7 +120,11 @@ export async function webhookRoutes(server: FastifyInstance) {
             payload,
             processed: false,
           })
-          .onConflictDoNothing(); // Guard against duplicate deliveries
+          // Dedup: unique index on (seller_id, delivery_id) prevents duplicate rows.
+          // BullMQ deduplicates job execution separately via jobId.
+          .onConflictDoNothing({
+            target: [schema.webhookEvents.sellerId, schema.webhookEvents.deliveryId],
+          });
       } catch (err) {
         server.log.error(`[Webhook] Failed to log event: ${(err as Error).message}`);
         // Don't stop processing — continue to queue the job
@@ -126,8 +132,7 @@ export async function webhookRoutes(server: FastifyInstance) {
 
       // --- Step 7: Queue for async processing ---
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (processWebhookQueue as any).add(
+        await processWebhookQueue.add(
           eventType,
           { sellerId: seller.id, eventType, payload, deliveryId },
           {

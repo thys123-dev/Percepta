@@ -39,7 +39,7 @@ export function CogsPage() {
         <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-500" />
         <div>
           <strong>Why COGS matters: </strong>
-          Without your product cost, Percepta estimates profit using 30% of the selling price.
+          Without your product cost, Percepta estimates profit using 50% of the selling price.
           Adding your real COGS ensures every margin number is accurate.
           Updates trigger a profit recalculation within seconds.
         </div>

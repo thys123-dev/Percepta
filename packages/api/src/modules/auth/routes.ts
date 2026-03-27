@@ -4,6 +4,7 @@ import bcrypt from 'bcrypt';
 import { db, schema } from '../../db/index.js';
 import { eq } from 'drizzle-orm';
 import { authenticate } from '../../middleware/auth.js';
+import { env } from '../../config/env.js';
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -53,12 +54,12 @@ export async function authRoutes(server: FastifyInstance) {
 
     const token = server.jwt.sign(
       { sellerId: seller.id, email: seller.email },
-      { expiresIn: '1h' }
+      { expiresIn: env.JWT_EXPIRES_IN }
     );
 
     const refreshToken = server.jwt.sign(
       { sellerId: seller.id, type: 'refresh' },
-      { expiresIn: '30d' }
+      { expiresIn: env.JWT_REFRESH_EXPIRES_IN }
     );
 
     return reply.status(201).send({
@@ -97,12 +98,12 @@ export async function authRoutes(server: FastifyInstance) {
 
     const token = server.jwt.sign(
       { sellerId: seller.id, email: seller.email },
-      { expiresIn: '1h' }
+      { expiresIn: env.JWT_EXPIRES_IN }
     );
 
     const refreshToken = server.jwt.sign(
       { sellerId: seller.id, type: 'refresh' },
-      { expiresIn: '30d' }
+      { expiresIn: env.JWT_REFRESH_EXPIRES_IN }
     );
 
     return {
@@ -130,7 +131,7 @@ export async function authRoutes(server: FastifyInstance) {
 
       const token = server.jwt.sign(
         { sellerId: payload.sellerId },
-        { expiresIn: '1h' }
+        { expiresIn: env.JWT_EXPIRES_IN }
       );
 
       return { token };

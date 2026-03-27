@@ -35,6 +35,14 @@ const periodQuerySchema = z.object({
   period: z.enum(['7d', '30d', '90d', 'custom']).default('30d'),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+}).superRefine((val, ctx) => {
+  if (val.period === 'custom' && !val.startDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'startDate is required when period is "custom"',
+      path: ['startDate'],
+    });
+  }
 });
 
 const productsQuerySchema = periodQuerySchema.extend({
@@ -70,9 +78,8 @@ function getPeriodDates(
     start = new Date(startDateStr);
     start.setHours(0, 0, 0, 0);
   } else {
-    start = new Date(end);
-    start.setDate(start.getDate() - 30);
-    start.setHours(0, 0, 0, 0);
+    // Should never reach here — Zod schema requires startDate for custom period.
+    throw new Error(`Invalid period "${period}": startDate is required for custom ranges`);
   }
 
   return { start, end };

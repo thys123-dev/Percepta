@@ -184,8 +184,7 @@ async function handleNewOrder(
   }
 
   // Queue profit calculation for the new/updated order
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (calculateProfitsQueue as any).add(
+  await calculateProfitsQueue.add(
     'calculate-from-webhook',
     {
       sellerId,

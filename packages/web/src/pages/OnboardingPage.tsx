@@ -95,9 +95,6 @@ export function OnboardingPage() {
   const completeOnboardingMutation = useMutation({
     mutationFn: () =>
       apiClient.patch('/sellers/profile', { onboardingComplete: true }).then((r) => r.data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['seller-me'] });
-    },
   });
 
   // ── Handlers ──────────────────────────────────────────────────────────────

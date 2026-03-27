@@ -210,7 +210,7 @@ export async function accountTransactionRoutes(server: FastifyInstance) {
           .values(values)
           .onConflictDoNothing({ target: [schema.accountTransactions.sellerId, schema.accountTransactions.transactionId] });
 
-        insertedCount += (result as { rowCount?: number }).rowCount ?? chunk.length;
+        insertedCount += (result as { rowCount?: number }).rowCount ?? 0;
       }
 
       // 2. Process reversals — update matching orders
@@ -278,24 +278,16 @@ export async function accountTransactionRoutes(server: FastifyInstance) {
             totalInclVatCents: agg.inclVat,
             transactionCount: agg.count,
           })
-          .onConflictDoNothing();
-        // If row existed, update by adding to existing totals
-        await db
-          .update(schema.sellerCosts)
-          .set({
-            totalExclVatCents: sql`${schema.sellerCosts.totalExclVatCents} + ${agg.exclVat}`,
-            totalVatCents: sql`${schema.sellerCosts.totalVatCents} + ${agg.vat}`,
-            totalInclVatCents: sql`${schema.sellerCosts.totalInclVatCents} + ${agg.inclVat}`,
-            transactionCount: sql`${schema.sellerCosts.transactionCount} + ${agg.count}`,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(schema.sellerCosts.sellerId, sellerId),
-              eq(schema.sellerCosts.month, month),
-              eq(schema.sellerCosts.costType, costType)
-            )
-          );
+          .onConflictDoUpdate({
+            target: [schema.sellerCosts.sellerId, schema.sellerCosts.month, schema.sellerCosts.costType],
+            set: {
+              totalExclVatCents: sql`${schema.sellerCosts.totalExclVatCents} + ${agg.exclVat}`,
+              totalVatCents: sql`${schema.sellerCosts.totalVatCents} + ${agg.vat}`,
+              totalInclVatCents: sql`${schema.sellerCosts.totalInclVatCents} + ${agg.inclVat}`,
+              transactionCount: sql`${schema.sellerCosts.transactionCount} + ${agg.count}`,
+              updatedAt: new Date(),
+            },
+          });
       }
 
       // 4. Queue profit recalculation for orders with reversals

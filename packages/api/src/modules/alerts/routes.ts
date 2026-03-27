@@ -19,7 +19,7 @@ import { authenticate } from '../../middleware/auth.js';
 
 const alertsQuerySchema = z.object({
   type: z
-    .enum(['loss_maker', 'margin_drop', 'storage_warning', 'ibt_risk', 'low_stock'])
+    .enum(['loss_maker', 'margin_drop', 'storage_warning', 'fee_overcharge', 'low_stock'])
     .optional(),
   severity: z.enum(['info', 'warning', 'critical']).optional(),
   unreadOnly: z.coerce.boolean().optional().default(false),
