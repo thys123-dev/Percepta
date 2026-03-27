@@ -1,885 +1,715 @@
-﻿# Testing with Mock Data — Implementation Plan
+# Percepta — Testing with Mock Data
 
 ## Context
 
-Percepta cannot be tested end-to-end without a real Takealot Seller API key. The developer needs a way to populate the entire application — dashboard, alerts, fee audit, COGS page — with realistic dummy data and run the full sync pipeline against a mock Takealot API. This plan adds a **seed script**, a **MockTakealotClient**, and **static test fixtures** with minimal changes to production code (3 files modified).
+Percepta cannot be tested end-to-end without a real Takealot Seller API key. This document describes the **seed script**, **MockTakealotClient**, **static test fixtures**, and the **manual testing guide** that allow a developer to populate the entire application — dashboard, alerts, fee audit, COGS page, inventory, returns — with realistic dummy data and run the full sync pipeline without any live credentials.
 
 ---
 
-## Approach: Seed Script + Mock Client + Fixtures
+## Architecture Overview
 
 | Layer | Purpose | How it works |
 |-------|---------|-------------|
-| **Database seed** (`npm run seed`) | Populate dashboard immediately | Inserts demo seller, 12 offers, ~180 orders, calculated fees, profit records, alerts directly via Drizzle ORM |
-| **MockTakealotClient** | Test sync pipeline end-to-end | Drop-in replacement for `TakealotClient` when `DEMO_MODE=true`; returns the same 12 products and ~180 orders in Takealot API response format |
+| **Database seed** (`npm run seed`) | Populate dashboard immediately | Inserts demo seller, 14 offers, 201 orders (183 random + 18 edge cases), calculated fees, profit records, and 12 alerts directly via Drizzle ORM |
+| **MockTakealotClient** | Test sync pipeline end-to-end | Drop-in replacement for `TakealotClient` when `DEMO_MODE=true`; returns the same 14 products and orders in Takealot API response format |
 | **Static fixtures** | Test CSV import + webhooks | A sample `sales-report.csv` and webhook JSON payloads for manual/automated testing |
 
 ---
 
-## PR 1: Demo Data Definitions + Seed Script
+## PR 1: Demo Data Definitions + Seed Script ✅
 
-### New files
+### Files
 
 **`packages/api/src/db/seeds/demo-data.ts`** — All product/order/alert data as typed constants
 
 **Demo Seller:**
 - Email: `demo@percepta.co.za` / Password: `DemoPass123!`
 - Business name: "Kalahari Goods Co."
-- API key: `demo-api-key-12345` (encrypted with AES-256 using existing `encrypt()`)
+- API key: `demo-api-key-12345` (AES-256 encrypted)
 - Fixed UUID: `00000000-0000-4000-a000-000000000001`
 - `onboardingComplete: true`, `initialSyncStatus: 'complete'`
+- Email preferences: weekly digest ON, loss alerts ON, margin threshold 15%
 
-**12 Products across 6 categories** (designed to exercise every fee path):
+**14 Products across 8 categories:**
 
-| # | Title | Category | Price | Weight | Volume | Scenario |
-|---|-------|----------|-------|--------|--------|----------|
-| 1 | Braai Master Tongs Set | Homeware | R349 | 800g | 3,000 cm³ | ✅ Profitable, Standard_General |
-| 2 | Rooibos Face Cream 50ml | Beauty | R199 | 200g | 500 cm³ | ✅ Profitable, Standard_FMCG |
-| 3 | Biltong Box 1kg Premium | Non-Perishable | R299 | 1,100g | 5,000 cm³ | ✅ Standard_NonPerishable, some IBT |
-| 4 | Wireless Earbuds Pro ZA | Electronic Accessories | R899 | 150g | 400 cm³ | ✅ Standard_Electronics |
-| 5 | Kids Safari Puzzle 500pc | Toys | R149 | 600g | 8,000 cm³ | ✅ High volume, profitable |
-| 6 | Camping Chair Deluxe | Camping & Outdoor | R1,499 | 8.5kg | 60,000 cm³ | ⚠️ Large+Heavy, marginal |
-| 7 | Yoga Mat Premium 6mm | Sport | R449 | 2kg | 45,000 cm³ | ⚠️ Large tier |
-| 8 | Baby Monitor WiFi | Baby | R1,999 | 400g | 2,000 cm³ | ⚠️ Overstocked (40 days), storage fees |
-| 9 | Garden Umbrella 3m | Garden, Pool & Patio | R2,499 | 12kg | 160,000 cm³ | Oversize+Heavy |
-| 10 | Office Desk Stand | Office Furniture | R3,499 | 15kg | 220,000 cm³ | Bulky, marginal |
-| 11 | Phone Case Ultra Thin | Mobile | R99 | 50g | 200 cm³ | 🔴 Loss-maker (low margin eaten by fees) |
-| 12 | LED Smart Bulb 4-Pack | Smart Home | R599 | 600g | 4,000 cm³ | 🔴 Overstocked + loss-maker |
+| # | Title | Category | Price | Scenario |
+|---|-------|----------|-------|----------|
+| 1 | Braai Master Tongs Set | Homeware | R349 | ✅ Profitable, Standard |
+| 2 | Rooibos Face Cream 50ml | Beauty | R199 | ✅ Profitable, high volume |
+| 3 | Biltong Box 1kg Premium | Non-Perishable | R299 | ✅ Steady, some IBT |
+| 4 | Wireless Earbuds Pro ZA | Electronic Accessories | R899 | ✅ High-value, high return rate |
+| 5 | Kids Safari Puzzle 500pc | Toys | R149 | ✅ Best seller, high volume |
+| 6 | Camping Chair Deluxe | Camping & Outdoor | R1,499 | ⚠️ Large+Heavy, IBT marginal |
+| 7 | Yoga Mat Premium 6mm | Sport | R449 | ⚠️ Estimated COGS, near-loss |
+| 8 | Baby Monitor WiFi | Baby | R1,999 | ⚠️ Overstocked (40 days), storage fees |
+| 9 | Garden Umbrella 3m | Garden | R2,499 | ⚠️ Oversize+Heavy, actual CSV fees present |
+| 10 | Office Desk Stand Adjustable | Office Furniture | R3,499 | ⚠️ Bulky, fee discrepancy (overcharge) |
+| 11 | Phone Case Ultra Thin | Mobile | R99 | 🔴 Loss-maker, high return rate |
+| 12 | LED Smart Bulb 4-Pack | Smart Home | R599 | 🔴 Overstocked (45 days) + loss-maker |
+| 13 | Stainless Steel Water Bottle | Sport | R249 | 🔴 Zero stock / discontinued |
+| 14 | Premium Notebook A5 Hardcover | Stationery | R79 | ⚠️ Near-zero margin, estimated COGS |
 
-**~180 orders over 90 days:**
-- Status mix: ~70% Shipped, ~10% Delivered, ~8% Accepted, ~5% Returned, ~4% Cancelled, ~3% Return Requested
-- DC mix: ~60% same-region, ~25% IBT (JHB↔CPT), ~15% DBN
-- Qty mix: ~80% qty=1, ~15% qty=2, ~5% qty=3-5
-- ~10% of orders have a promotion string
-- Dates distributed with recent-day bias (more orders in last 30 days for meaningful trends)
-- Deterministic PRNG (seeded mulberry32) so re-runs produce identical data
+**201 Orders (183 random + 18 explicit edge cases):**
 
-**8-10 alerts:**
-- 2 × loss_maker (products #11, #12) — 1 read, 1 unread
-- 1 × margin_drop (product #6)
-- 2 × storage_warning (products #8, #12)
-- 1 × fee_overcharge
-- Mix of warning/critical severity
+| Status | Count |
+|--------|-------|
+| Shipped / Delivered / Accepted | ~160 (fees calculated) |
+| Returned (with `reversal_amount_cents`) | ~22 |
+| Return Requested (pending) | ~10 |
+| Cancelled | ~9 |
 
-**`packages/api/src/db/seeds/seed.ts`** — Main entry point
+**18 Explicit Edge-Case Orders:**
+
+| # | Scenario | Product | What it tests |
+|---|----------|---------|---------------|
+| 1 | Full return + reversal | Earbuds | `reversal_amount_cents` = full price, excluded from profit |
+| 2 | Return Requested (pending) | Baby Monitor | Pending return, not yet processed |
+| 3 | Cancelled before dispatch | Camping Chair | No fees, no profit, excluded |
+| 4 | Multi-unit return (qty 3) | Phone Case | Reversal for 3 units |
+| 5 | Partial return (1 of 2 units) | Biltong Box | `has_reversal=true`, partial refund |
+| 6 | Daily Deal, qty 5 | Rooibos Cream | Promo string, bulk quantity |
+| 7 | Daily Deal + Return | Safari Puzzle | Both promo and return flags |
+| 8 | IBT cross-region (JHB→CPT) | Camping Chair | IBT penalty applied |
+| 9 | IBT + Return combined | Yoga Mat | Both IBT penalty and reversal |
+| 10 | Actual CSV fee data (match) | Garden Umbrella | Fees match — no discrepancy |
+| 11 | Actual CSV fee data (overcharge) | Desk Stand | Success fee overcharged by R8.76 |
+| 12 | Out-of-stock, historical (delivered) | Water Bottle | Last sale before stockout |
+| 13 | Out-of-stock, cancelled | Water Bottle | Cancelled due to no stock |
+| 14 | Near-zero margin + IBT + qty 5 | Notebook | Multi-unit, IBT, marginal profit |
+| 15 | Near-zero margin + return | Notebook | Return on marginal product |
+| 16 | Multi-unit Daily Deal (loss-maker) | LED Bulb | qty 4, promo, still loss-making |
+| 17 | Return Requested (loss-maker) | Phone Case | Return pending on loss-making product |
+| 18 | Overstock + historical return | Baby Monitor | Return from overstocked product |
+
+**12 Alerts:**
+
+| Type | Severity | Product | Read? |
+|------|----------|---------|-------|
+| loss_maker | critical | Phone Case | No |
+| loss_maker | critical | LED Bulb | Yes |
+| margin_drop | warning | Camping Chair | No |
+| storage_warning | warning | Baby Monitor | No |
+| storage_warning | critical | LED Bulb | No |
+| margin_drop | warning | Biltong Box | Yes |
+| loss_maker | warning | Yoga Mat (near-loss) | No |
+| storage_warning | warning | Desk Stand (approaching) | Yes |
+| return_spike | warning | Earbuds (25% return rate) | No |
+| loss_maker | warning | Notebook (near-loss, est. COGS) | No |
+| out_of_stock | critical | Water Bottle (0 stock) | No |
+| fee_discrepancy | warning | Desk Stand (overcharged R8.76) | No |
+
+**`packages/api/src/db/seeds/seed.ts`** — Entry point
 
 ```
-1. Connect to DB (uses existing DATABASE_URL)
-2. Check if demo seller exists → DELETE cascade all data for that seller ID
-3. Insert demo seller (bcrypt hash password, encrypt API key)
-4. Insert 12 offers with proper sizeTier/weightTier classification
-5. Insert ~180 orders using deterministic PRNG
-6. For each order: call real calculateFees() + calculateProfit() from fee-calculator.ts
+1. Delete demo seller (CASCADE removes all child data)
+2. Insert seller (bcrypt password, AES-256 encrypted API key)
+3. Insert 14 offers with sizeTier/weightTier classification
+4. Merge random orders + 18 explicit edge-case orders (201 total)
+5. For each non-excluded order: call real calculateFees() + calculateProfit()
    → inserts into calculated_fees and profit_calculations
-   (This guarantees seeded profit numbers match the real pipeline exactly)
-7. Insert alerts
-8. Log summary: "✅ Seeded: 1 seller, 12 products, N orders, N alerts"
+6. Insert 12 alerts
+7. Print full summary including edge-case coverage list
 ```
 
 **Key design decisions:**
 - Uses real `calculateFees()` and `calculateProfit()` — no hardcoded fee amounts
 - Fixed seller UUID for reliable idempotent delete-and-recreate
-- `db.delete().where(eq(sellerId, DEMO_SELLER_ID))` with FK cascade handles cleanup
-- Imports `encrypt` from existing `config/encryption.ts` for API key storage
-
-### Modified files
-
-- `packages/api/package.json` — add `"seed": "tsx src/db/seeds/seed.ts"`
-- Root `package.json` — add `"seed": "npm run seed -w packages/api"`
+- Returns, cancellations, and Return Requested orders are inserted but **excluded from fee/profit calculation** — matching production pipeline behaviour
+- `reversalAmountCents` and `hasReversal` are populated on all return orders
+- Actual CSV fee fields (`actualSuccessFeeCents`, `netSalesAmountCents`, etc.) are populated on fee-audit orders
+- Out-of-stock product (`offerId: 100013`) has `status: 'Not Buyable'` and `salesUnits30d: 0`
 
 ---
 
-## PR 2: MockTakealotClient + DEMO_MODE
-
-### New files
+## PR 2: MockTakealotClient + DEMO_MODE ✅
 
 **`packages/api/src/modules/takealot-client/mock-client.ts`**
-
-A class that implements the same public methods as `TakealotClient`:
 
 | Method | Behaviour |
 |--------|-----------|
 | `testConnection()` | Returns `true` after 200ms delay |
-| `getOfferCount()` | Returns `{ total: 12 }` |
+| `getOfferCount()` | Returns `{ total: 14 }` |
 | `getOffers(page)` | Returns paginated `TakealotOffer[]` from demo-data |
-| `fetchAllOffers(onProgress?)` | Async generator yielding all 12 offers in one batch |
+| `fetchAllOffers(onProgress?)` | Async generator yielding all 14 offers in one batch |
 | `getSales(start, end, page)` | Returns paginated `TakealotSale[]` filtered by date range |
 | `fetchAllSales(start, end, onProgress?)` | Async generator yielding deterministic orders |
 | `getOffer(offerId)` | Single offer lookup |
 | `getRateLimitStatus()` | Returns healthy rate limit state |
 
-- Uses the same product definitions from `demo-data.ts`
-- Generates orders using the same deterministic PRNG as the seed script
-- Adds 100-500ms `setTimeout` delays to simulate network latency
-- Returns data in exact `TakealotPaginatedResponse` format
+**`packages/api/src/config/env.ts`** — `DEMO_MODE: z.coerce.boolean().default(false)`
 
-### Modified files (production code — 2 files)
-
-**`packages/api/src/config/env.ts`** — Add 1 line:
-```typescript
-DEMO_MODE: z.coerce.boolean().default(false),
-```
-
-**`packages/api/src/modules/sync/utils/get-seller-client.ts`** — Add ~5 lines after API key decryption:
-```typescript
-const apiKey = decrypt(seller.apiKeyEnc);
-if (env.DEMO_MODE && apiKey === 'demo-api-key-12345') {
-  const { MockTakealotClient } = await import('../../takealot-client/mock-client.js');
-  return new MockTakealotClient() as unknown as TakealotClient;
-}
-```
-Dynamic `import()` ensures mock module is never loaded in production.
+**`packages/api/src/modules/sync/utils/get-seller-client.ts`** — ~5 lines: if `DEMO_MODE=true` and API key is `demo-api-key-12345`, return `MockTakealotClient` instead of real client.
 
 ---
 
-## PR 3: Static Fixtures (CSV + Webhook Payloads)
-
-### New files
+## PR 3: Static Fixtures ✅
 
 **`packages/api/fixtures/sample-sales-report.csv`**
-- 30 rows matching the exact 20-column format from `sales-report-parser.ts`
-- Uses a subset of seeded order IDs for matching
-- Intentionally includes:
-  - 2 rows where success fee differs from calculated by >5% (triggers fee discrepancy)
-  - 1 row with a mismatched stock transfer fee
-  - Mix of "Shipped", "Delivered", "Returned" statuses
-  - Ship dates spanning both v1 and v2 fee matrix periods
-  - Realistic Rand formatting (e.g. "1250.50")
+- 30 rows in the exact 20-column format from `sales-report-parser.ts`
+- Intentional discrepancies: 2 rows overcharged, 1 row mismatched stock transfer fee
+- Mix of Shipped, Delivered, Returned statuses
+- Ship dates spanning both v1 and v2 fee matrix periods
 
-**`packages/api/fixtures/webhook-new-order.json`**
-- Valid `NewOrderPayload` for product #1, amounts in Rands
-- Includes `event_type: "New Leadtime Order"` and a unique `delivery_id`
+**`packages/api/fixtures/webhook-new-order.json`** — New order payload for product #1
 
-**`packages/api/fixtures/webhook-status-changed.json`**
-- Status change from "Shipped" to "Delivered" for an existing seeded order
+**`packages/api/fixtures/webhook-status-changed.json`** — Status change Shipped → Delivered
 
-**`packages/api/fixtures/webhook-offer-updated.json`**
-- Price change for product #4 (Wireless Earbuds)
+**`packages/api/fixtures/webhook-offer-updated.json`** — Price change for Wireless Earbuds
 
 ---
 
-## Developer Workflow After Implementation
+## Developer Quick Start
 
 ```bash
-# 1. Seed the database (safe to re-run)
+# 1. Seed the database (safe to re-run — deletes and recreates demo data)
 npm run seed
-# Output: ✅ Seeded: 1 seller, 12 products, 183 orders, 8 alerts
+# Output:
+# ✅ Seeded: 1 seller, 14 products, 201 orders, 12 alerts
+#    Fees calculated: 160 (139 profitable, 21 loss-making)
+#    Excluded: 41 (22 returned, 10 return requested, 9 cancelled)
+#    Edge cases: 18 explicit scenario orders
 
-# 2. Start API in demo mode
+# 2. Start API (demo mode uses MockTakealotClient for sync)
 DEMO_MODE=true npm run dev:api
 
 # 3. Start frontend
 npm run dev:web
 
-# 4. Login with demo credentials
-#    Email: demo@percepta.co.za
+# 4. Login
+#    URL:      http://localhost:5173
+#    Email:    demo@percepta.co.za
 #    Password: DemoPass123!
 
-# 5. Dashboard is fully populated:
-#    - 12 products with realistic margins
-#    - KPI scorecard with trends
-#    - Fee breakdown chart
-#    - 2 loss-makers surfaced at top of product table
-#    - 6+ unread alerts in bell badge
-
-# 6. Test sync pipeline (uses MockTakealotClient)
-#    Click "Sync Now" in the UI or:
-curl -X POST http://localhost:3001/api/sync/trigger \
-  -H "Authorization: Bearer <token>"
-
-# 7. Test webhook processing
+# 5. Test webhook
 curl -X POST http://localhost:3001/api/webhooks/takealot/00000000-0000-4000-a000-000000000001 \
   -H "Content-Type: application/json" \
   -d @packages/api/fixtures/webhook-new-order.json
 
-# 8. Test CSV fee audit
+# 6. Test CSV fee audit
 #    Upload packages/api/fixtures/sample-sales-report.csv via the Fee Audit page
 #    → 3 discrepancies should appear
+
+# 7. Test COGS Excel template download
+#    COGS page → CSV Import tab → click "Excel (.xlsx)" to download
+#    → Open in Excel: yellow columns are editable, grey are read-only
+#    → Fill in COGS, upload the file back
 ```
 
 ---
 
-## Files Summary
-
-| File | Action | Purpose |
-|------|--------|---------|
-| `packages/api/src/db/seeds/demo-data.ts` | CREATE | Product/order/alert definitions |
-| `packages/api/src/db/seeds/seed.ts` | CREATE | Seed script entry point |
-| `packages/api/src/modules/takealot-client/mock-client.ts` | CREATE | MockTakealotClient class |
-| `packages/api/fixtures/sample-sales-report.csv` | CREATE | Sample CSV for fee audit |
-| `packages/api/fixtures/webhook-new-order.json` | CREATE | Webhook test payload |
-| `packages/api/fixtures/webhook-status-changed.json` | CREATE | Webhook test payload |
-| `packages/api/fixtures/webhook-offer-updated.json` | CREATE | Webhook test payload |
-| `packages/api/src/config/env.ts` | MODIFY | Add `DEMO_MODE` env var (1 line) |
-| `packages/api/src/modules/sync/utils/get-seller-client.ts` | MODIFY | Mock client swap (5 lines) |
-| `packages/api/package.json` | MODIFY | Add `seed` script |
-| Root `package.json` | MODIFY | Add `seed` script |
-
-**Total production code changes: 3 files, ~6 lines**
-
----
-
-## Verification
-
-1. **Seed script**: Run `npm run seed` → confirm no errors, check DB has 12 offers, ~180 orders, profit records
-2. **Dashboard**: Login as demo user → all 4 KPI cards populated, product table shows 12 products with mix of green/yellow/red margins
-3. **Alerts**: Bell badge shows unread count, alerts page has loss-maker and storage warnings
-4. **COGS page**: All 12 products visible, mix of ✓ manual and ⚠ estimated badges
-5. **Sync flow**: Trigger sync with `DEMO_MODE=true` → MockTakealotClient serves data → profit recalculation runs
-6. **Fee audit**: Upload sample CSV → preview shows matched orders → import → 3 discrepancies appear on discrepancy tab
-7. **Webhooks**: POST fixture JSON to webhook endpoint → new order appears, status updates correctly
-8. **Idempotency**: Run `npm run seed` twice → no duplicate data, same counts
-
----
 ---
 
 # Manual Testing Guide — Step by Step
 
-> This guide walks you through testing every feature of Percepta from cold start to sign-out, using the demo seed data (no real Takealot API key required).
+> This guide walks through testing every feature of Percepta from cold start to sign-out, using the demo seed data (no real Takealot API key required).
 
 ---
 
 ## Prerequisites
 
-Before you begin, ensure the following are installed:
-- **Node.js** ≥ 20.0.0
-- **Docker Desktop** (for PostgreSQL and Redis)
-- **A modern browser** (Chrome/Edge recommended for DevTools)
+- **Node.js** ≥ 18.0.0
+- **PostgreSQL** and **Redis** accessible (Railway or local Docker)
+- A modern browser (Chrome/Edge recommended)
 
 ---
 
 ## Phase 1: Environment Setup
 
-### Step 1 — Start Docker Services
-
+### Step 1 — Install Dependencies
 ```bash
 cd I:\Projects\Percepta
-docker-compose up -d
-```
-
-**Pass criteria:** `docker ps` shows two healthy containers — `postgres` (port 5432) and `redis` (port 6379).
-
-### Step 2 — Install Dependencies
-
-```bash
 npm install
 ```
+**Pass:** No errors. `node_modules/` present.
 
-**Pass criteria:** Command completes without errors. `node_modules/` exists in root and all workspace packages.
-
-### Step 3 — Configure Environment Variables
-
-```bash
-cp packages/api/.env.example packages/api/.env
-```
-
-Edit `packages/api/.env` and ensure these values are set:
+### Step 2 — Configure Environment Variables
+Edit `packages/api/.env`:
 ```
 PORT=3001
 NODE_ENV=development
-DATABASE_URL=postgresql://percepta:percepta_dev@localhost:5432/percepta
-REDIS_URL=redis://localhost:6379
-JWT_SECRET=dev-secret-key-minimum-32-characters-long
-ENCRYPTION_KEY=dev-encryption-key-32-chars-long!
+DATABASE_URL=<your postgres URL>
+REDIS_URL=<your redis URL>
+JWT_SECRET=<32+ char secret>
+ENCRYPTION_KEY=<32 char key>
 FRONTEND_URL=http://localhost:5173
 DEMO_MODE=true
 ```
+**Pass:** File saved with `DEMO_MODE=true`.
 
-**Pass criteria:** File saved. `DEMO_MODE=true` is present.
-
-### Step 4 — Run Database Migrations
-
+### Step 3 — Run Database Migrations
 ```bash
 npm run db:migrate
 ```
+**Pass:** All migrations applied (0001–0005+). No errors.
 
-**Pass criteria:** Console output shows all migrations applied successfully (0001 through 0005+). No errors.
-
-### Step 5 — Seed Demo Data
-
+### Step 4 — Seed Demo Data
 ```bash
 npm run seed
 ```
-
-**Pass criteria:** Console output shows:
+**Pass:** Output shows:
 ```
-✅ Seeded: 1 seller, 12 products, ~180 orders, 8 alerts
+✅ Seeded: 1 seller, 14 products, 201 orders, 12 alerts
+   Fees calculated: 160 (139 profitable, 21 loss-making)
+   Excluded: 41 (22 returned, 10 return requested, 9 cancelled)
+   Edge cases: 18 explicit scenario orders
 ```
-No database errors.
 
-### Step 6 — Start the API Server
-
+### Step 5 — Start API
 ```bash
 npm run dev:api
 ```
+**Pass:** Console shows `🚀 Percepta API running at http://0.0.0.0:3001`. BullMQ workers started.
 
-**Pass criteria:** Console shows `Server listening on http://0.0.0.0:3001`. No crash on startup. BullMQ workers started.
-
-### Step 7 — Start the Frontend
-
-Open a **second terminal**:
+### Step 6 — Start Frontend
 ```bash
-npm run dev:web
+npm run dev:web   # second terminal
 ```
-
-**Pass criteria:** Console shows `Local: http://localhost:5173/`. Vite dev server running.
-
-### Step 8 — Verify Health Check
-
-Open browser: `http://localhost:3001/api/health`
-
-**Pass criteria:** JSON response shows `{ "status": "ok", "checks": { "database": "ok", "redis": "ok" } }`.
+**Pass:** Console shows `Local: http://localhost:5173/`.
 
 ---
 
-## Phase 2: Authentication Testing
+## Phase 2: Authentication
 
-### Test 2.1 — Register Page UI
-
-1. Open `http://localhost:5173/register`
-2. Observe the page layout
-
-**Pass criteria:**
-- [ ] Percepta logo/title visible
-- [ ] "Start seeing your real profit today" tagline displayed
-- [ ] Form has fields: Business Name, Email, Password, Confirm Password
-- [ ] "Create account" button is present
-- [ ] "No credit card required" footer text visible
-- [ ] "Sign in" link visible at the bottom
-
-### Test 2.2 — Registration Validation
-
-1. Click **Create account** with all fields empty
-2. Enter password "abc" (too short)
-3. Enter password "12345678" and confirm password "87654321" (mismatch)
-
-**Pass criteria:**
-- [ ] Empty form shows required field errors
-- [ ] Short password shows "Password must be at least 8 characters"
-- [ ] Mismatched passwords shows "Passwords do not match"
-
-### Test 2.3 — New Account Registration
-
-1. Fill in: Business Name = "Test Co", Email = `test@test.com`, Password = `TestPass123!`, Confirm = `TestPass123!`
-2. Click **Create account**
-
-**Pass criteria:**
-- [ ] Button changes to "Creating account..." with loading state
-- [ ] Redirects to `/onboarding` on success
-- [ ] No error messages
-
-### Test 2.4 — Login Page UI
-
-1. Navigate to `http://localhost:5173/login`
-
-**Pass criteria:**
+### Test 2.1 — Login Page UI
+Navigate to `http://localhost:5173/login`
 - [ ] "See your real Takealot profit" tagline displayed
 - [ ] Email and Password fields present
 - [ ] "Sign in" button visible
 - [ ] "Create one" link to register page visible
 
-### Test 2.5 — Login with Demo Account
-
-1. Enter Email: `demo@percepta.co.za`
-2. Enter Password: `DemoPass123!`
-3. Click **Sign in**
-
-**Pass criteria:**
+### Test 2.2 — Login with Demo Account
+Email: `demo@percepta.co.za` / Password: `DemoPass123!`
 - [ ] Button changes to "Signing in..."
-- [ ] Redirects to `/dashboard` (because demo account has `onboardingComplete: true`)
+- [ ] Redirects to `/dashboard` (onboarding already complete)
 - [ ] No error messages
 
-### Test 2.6 — Login with Wrong Credentials
+### Test 2.3 — Login with Wrong Password
+Enter wrong password → click Sign in
+- [ ] "Invalid email or password" error displayed
+- [ ] Stays on login page; form not cleared
 
-1. Enter Email: `demo@percepta.co.za`
-2. Enter Password: `wrongpassword`
-3. Click **Sign in**
-
-**Pass criteria:**
-- [ ] Red error message displayed (e.g. "Invalid email or password")
-- [ ] Stays on login page
-- [ ] Form is not cleared
+### Test 2.4 — New Account Registration
+Navigate to `/register` → fill in Business Name, Email, Password
+- [ ] Button shows "Creating account..." during submit
+- [ ] Redirects to `/onboarding` on success
+- [ ] Validation errors show for empty/short/mismatched password
 
 ---
 
-## Phase 3: Dashboard Testing
-
-> Login as `demo@percepta.co.za` / `DemoPass123!` before proceeding.
+## Phase 3: Dashboard
 
 ### Test 3.1 — Dashboard Layout
+After login, observe the main dashboard
+- [ ] "Profitability Dashboard" heading visible
+- [ ] 4 KPI scorecard cards (Net Profit, Revenue, Margin, Loss-Makers)
+- [ ] Period selector pills: 7d, 30d, 90d, Custom
+- [ ] Product Performance table below KPIs
+- [ ] "Where Your Money Goes" fee chart below table
+- [ ] Sidebar navigation (Dashboard, Inventory, Alerts, COGS, Fee Audit, Notifications)
+- [ ] Bell icon in top bar with unread count badge
 
-1. Observe the main dashboard page after login
-
-**Pass criteria:**
-- [ ] Page title "Profitability Dashboard" visible
-- [ ] Subtitle "Real-time profit visibility for your Takealot business" visible
-- [ ] Period selector pills visible (7d, 30d, 90d, custom)
-- [ ] 4 KPI scorecard cards visible (Net Profit, Revenue, Margin, Loss-Makers)
-- [ ] Product Performance table visible below
-- [ ] Fee Summary section visible at the bottom
-- [ ] Sidebar navigation present (Dashboard, Alerts, COGS, Fee Audit, Notifications)
-- [ ] Bell icon in top bar visible
-
-### Test 3.2 — KPI Scorecard Cards
-
-1. Observe the 4 KPI cards (default period = 30d)
-
-**Pass criteria:**
-- [ ] **Net Profit** shows a rand amount (positive or negative) with trend arrow and "vs prev 30d"
-- [ ] **Total Revenue** shows a positive rand amount with trend
-- [ ] **Profit Margin** shows a percentage — colour coded (green ≥ 25%, yellow 0–24%, red < 0%)
-- [ ] **Loss-Making Products** shows a count ≥ 2 (products #11 and #12) with an "Alert" badge
+### Test 3.2 — KPI Scorecard Cards (30d default)
+- [ ] **Net Profit**: Rand amount with trend arrow and "vs prev 30d"
+- [ ] **Total Revenue**: Positive rand amount with trend
+- [ ] **Profit Margin**: % colour-coded (green ≥ 25%, yellow 0–24%, red < 0%)
+- [ ] **Loss-Making Products**: Count ≥ 2 with "Alert" badge
 
 ### Test 3.3 — Period Selector
-
-1. Click **7d** pill
-2. Observe KPI numbers change
-3. Click **90d** pill
-4. Observe KPI numbers change (should show more orders/revenue)
-5. Click **Custom**, set start = 60 days ago, end = 30 days ago
-
-**Pass criteria:**
+Switch 7d → 30d → 90d → Custom (60 days ago to 30 days ago)
 - [ ] 7d shows fewer orders/less revenue than 30d
 - [ ] 90d shows more orders/revenue than 30d
-- [ ] Custom date range shows data only for the selected window
-- [ ] Trend comparisons update for each period
+- [ ] Custom range shows data only for selected window
 - [ ] Active pill is visually highlighted
 
-### Test 3.4 — Product Performance Table
-
-1. Observe the product table (default sort = lowest margin first)
-
-**Pass criteria:**
-- [ ] Loss-making products (#11 Phone Case, #12 LED Smart Bulb) appear at the TOP
-- [ ] Table shows columns: Product, Units, Revenue, Fees, COGS, Net Profit, Margin, Last Sale
-- [ ] Fees column values are in red text
-- [ ] Net Profit column uses green for positive, red for negative
-- [ ] Margin column shows colour-coded badges (Profitable/Marginal/Loss-Maker)
-- [ ] COGS column shows ✓ (manual) or ⚠ (estimated) indicators
-- [ ] Product count label shows "12 products"
-- [ ] Search bar placeholder reads "Search products or SKU…"
+### Test 3.4 — Product Performance Table (Default Sort)
+- [ ] **Phone Case Ultra Thin** and **LED Smart Bulb** appear at the TOP (loss-makers sort first)
+- [ ] Table columns: Product, Units, Revenue, Fees, COGS, Net Profit, Margin, Last Sale
+- [ ] Fees column in red text
+- [ ] Net Profit: green (positive), red (negative)
+- [ ] Margin: colour-coded badge (Profitable / Marginal / Loss-Maker)
+- [ ] COGS column: ✓ Manual or ⚠ Estimated indicator
+- [ ] **14 products** total count shown (includes out-of-stock Water Bottle with 0 sales)
+- [ ] **Stainless Steel Water Bottle** shows 0 units sold, 0 revenue for 30d period
 
 ### Test 3.5 — Product Table Sorting
-
-1. Click the **Revenue** column header (sort descending)
-2. Click **Margin** column header (sort ascending = loss-makers first)
-3. Click **Units** column header
-4. Click **Last Sale** column header
-
-**Pass criteria:**
-- [ ] Each click re-sorts the table by that column
-- [ ] Clicking the same column header toggles asc/desc
-- [ ] Sort indicator (arrow) visible on active column
+Click Revenue → Margin → Units → Last Sale column headers
+- [ ] Each click re-sorts correctly
+- [ ] Toggle asc/desc on same column
+- [ ] Sort indicator arrow visible on active column
 
 ### Test 3.6 — Product Table Search
-
-1. Type "Braai" in the search bar
-2. Observe table filters
-3. Clear the search
-4. Type a SKU value
-
-**Pass criteria:**
-- [ ] Table filters to show only matching products
-- [ ] Product count updates (e.g. "1 product")
-- [ ] Clearing search restores all 12 products
-- [ ] SKU search works correctly
+Type "Braai" → then clear → then type a SKU
+- [ ] Filters to matching product(s); count updates
+- [ ] Clearing restores all 14 products
+- [ ] SKU search works
 
 ### Test 3.7 — Fee Waterfall (Row Expansion)
+Click any product row (e.g. "Braai Master Tongs Set")
+- [ ] Row expands to show waterfall
+- [ ] Steps: Selling Price → Success Fee → Fulfilment Fee → IBT Penalty → VAT on Fees → Storage Fee → COGS → Inbound Cost → Net Profit
+- [ ] All amounts in Rands
+- [ ] Net Profit at bottom matches the table's Net Profit column
+- [ ] Clicking row again collapses
 
-1. Click on any product row (e.g. "Braai Master Tongs Set")
-2. Observe the expanded fee waterfall breakdown
+### Test 3.8 — Fee Waterfall on Multi-Unit Order
+Click "Rooibos Face Cream 50ml" (has a qty-5 Daily Deal order)
+- [ ] "Per unit · order qty: N" label visible when qty > 1
+- [ ] Selling price shown is the per-unit price, not order total
 
-**Pass criteria:**
-- [ ] Row expands to show fee waterfall
-- [ ] Shows: Selling Price → Success Fee → Fulfilment Fee → IBT Penalty → Storage Fee → COGS → Inbound Cost → Net Profit
-- [ ] All amounts in rands
-- [ ] Net profit at the bottom matches the table's Net Profit column
-- [ ] Clicking the row again collapses it
-
-### Test 3.8 — Fee Summary Chart
-
-1. Scroll down to the "Where Your Money Goes" section
-
-**Pass criteria:**
-- [ ] Horizontal bar chart visible with colour-coded fee types
-- [ ] Fee types shown: Success Fee (orange), Fulfilment Fee (red), IBT Penalty (purple), Storage (yellow)
-- [ ] Each bar shows the amount and percentage of revenue
-- [ ] Detail table below shows Fee Type, Amount (R), and % of Revenue columns
+### Test 3.9 — Fee Summary Chart
+Scroll to "Where Your Money Goes"
+- [ ] Bar chart with colour-coded fee types
+- [ ] Fee types: Success Fee, Fulfilment Fee, IBT Penalty, Storage
+- [ ] Each bar shows amount and % of revenue
+- [ ] Detail table below: Fee Type, Amount (R), % of Revenue columns
 - [ ] Total Fees row at the bottom
 
 ---
 
-## Phase 4: Alerts Testing
+## Phase 4: Returns & Reversals
 
-### Test 4.1 — Alert Bell Badge
+> These tests verify the application correctly handles the 18 edge-case orders.
 
-1. Observe the bell icon in the top bar
+### Test 4.1 — Returned Orders Excluded from Profit
+On the Dashboard product table, select **90d** period
+- [ ] "Wireless Earbuds Pro ZA" margin is not inflated by the returned order
+- [ ] The returned Earbuds order (R899) does NOT appear in profit calculations
+- [ ] Net profit for Earbuds reflects only non-returned orders
 
-**Pass criteria:**
-- [ ] Red badge with unread count visible (should be ≥ 1)
-- [ ] Clicking the bell navigates to `/dashboard/alerts`
+### Test 4.2 — Return Spike Alert
+Navigate to Alerts page
+- [ ] Alert "High return rate: Wireless Earbuds Pro ZA" visible (warning severity)
+- [ ] Message mentions 25% return rate and 3 returns in 7 days
 
-### Test 4.2 — Alerts Page Layout
+### Test 4.3 — Return Requested Status
+On the product table, click **Baby Monitor WiFi** to expand fee waterfall
+- [ ] Product has a "Return Requested" order in the 90d window
+- [ ] That order does NOT appear in profit/fee totals (excluded status)
 
-1. Navigate to `/dashboard/alerts`
+### Test 4.4 — Cancelled Orders Excluded
+Click **Camping Chair Deluxe** fee waterfall
+- [ ] Cancelled order (R1,499) is not included in any revenue or fee totals
+- [ ] Table shows only delivered/shipped orders for fee calculation
 
-**Pass criteria:**
-- [ ] Page title "Alerts" visible
-- [ ] Subtitle about proactive notifications visible
-- [ ] Filter tabs visible: All, Loss-Makers, Margin Drops, Storage
-- [ ] "Mark all read" button visible (if unread alerts exist)
-- [ ] Alert cards displayed in a list
+### Test 4.5 — Partial Return (has_reversal = true)
+Scroll to **Biltong Box 1kg Premium** in product table
+- [ ] Product shows `has_reversal` on one delivered order (visible in DB / future UI)
+- [ ] Net profit for that order reflects the partial refund scenario
 
-### Test 4.3 — Alert Card Content
+### Test 4.6 — Out-of-Stock Product
+Locate **Stainless Steel Water Bottle** in the product table
+- [ ] Shows 0 units sold, R0 revenue for 30d period
+- [ ] Historical orders (25 days ago) appear when switching to 90d
+- [ ] Alert "Out of stock: Stainless Steel Water Bottle" visible on Alerts page (critical)
 
-1. Observe the alert cards
+---
 
-**Pass criteria:**
-- [ ] Each card has: coloured left border (red or yellow), icon, title, message, date
-- [ ] Unread alerts have bold title text
-- [ ] Unread alerts have "Mark as read" button
-- [ ] Loss-maker alerts mention specific product names and loss amounts
-- [ ] Storage warnings mention stock cover days
+## Phase 5: Inventory Management
 
-### Test 4.4 — Alert Filtering
+### Test 5.1 — Inventory Page Layout
+Navigate to **Inventory** via sidebar
+- [ ] Page title "Inventory" visible
+- [ ] Product table shows all 14 products
+- [ ] Columns: Product, SKU, JHB Stock, CPT Stock, DBN Stock, Total Stock, Stock Cover (days), Status
 
-1. Click **Loss-Makers** tab
-2. Click **Storage** tab
-3. Click **All** tab
+### Test 5.2 — Stock Level Display
+Observe stock levels per DC
+- [ ] **Phone Case Ultra Thin**: JHB 200, CPT 150, Total 350
+- [ ] **Stainless Steel Water Bottle**: 0 across all DCs — "Out of Stock" status badge
+- [ ] **Baby Monitor WiFi**: JHB 60 — "Overstocked" badge (40-day cover)
+- [ ] **LED Smart Bulb**: JHB 90 — "Overstocked" badge (45-day cover)
+- [ ] **Kids Safari Puzzle**: JHB 100 — Normal badge (8-day cover)
 
-**Pass criteria:**
-- [ ] Loss-Makers tab shows only loss_maker alerts (products #11, #12)
-- [ ] Storage tab shows storage_warning alerts (products #8, #12)
-- [ ] All tab shows every alert type
-- [ ] Counts per tab are accurate
+### Test 5.3 — Overstocked Warning Badges
+- [ ] Products with stock cover > 35 days show ⚠️ Overstocked (yellow or red)
+- [ ] Products with stock cover ≤ 35 days show normal status
+- [ ] Out-of-stock product shows 🔴 Out of Stock (red)
 
-### Test 4.5 — Mark Alert as Read
+### Test 5.4 — Stock Cover Sorting
+Click the "Stock Cover" column header to sort
+- [ ] Sorting descending puts Baby Monitor (40d) and LED Bulbs (45d) at the top
+- [ ] Out-of-stock product shows 0 or "–" in stock cover column
 
-1. Click "Mark as read" on an unread alert
-2. Observe the change
+### Test 5.5 — Low Stock Alert
+Check inventory for products with low stock cover (< 10 days)
+- [ ] **Kids Safari Puzzle** (8-day cover) shows low stock indicator
+- [ ] **Yoga Mat Premium** (5-day cover) shows low stock indicator
 
-**Pass criteria:**
-- [ ] Alert title changes from bold to normal weight
-- [ ] "Mark as read" button disappears for that alert
+### Test 5.6 — Multi-DC Distribution
+- [ ] **Biltong Box**: JHB 40, CPT 20 — split across two DCs
+- [ ] **Rooibos Face Cream**: CPT 80 only (no JHB/DBN)
+- [ ] **Office Desk Stand**: DBN 5 only (single DC)
+
+---
+
+## Phase 6: Alerts
+
+### Test 6.1 — Alert Bell Badge
+Observe bell icon in top bar
+- [ ] Red badge shows unread count (≥ 5 unread alerts seeded)
+- [ ] Clicking navigates to `/dashboard/alerts`
+
+### Test 6.2 — Alerts Page Layout
+- [ ] Filter tabs: All, Loss-Makers, Margin Drops, Storage
+- [ ] "Mark all read" button visible
+- [ ] Alert cards with coloured left borders (critical = red, warning = yellow)
+
+### Test 6.3 — All Alert Types Present
+Scroll through all alerts
+- [ ] 🔴 **Loss-maker**: Phone Case Ultra Thin — critical, unread
+- [ ] 🔴 **Loss-maker**: LED Smart Bulb — critical, read (already acknowledged)
+- [ ] ⚠️ **Margin drop**: Camping Chair Deluxe — warning, unread
+- [ ] ⚠️ **Storage warning**: Baby Monitor WiFi — warning, unread
+- [ ] 🔴 **Storage warning**: LED Smart Bulb — critical, unread
+- [ ] ⚠️ **Margin drop**: Biltong Box — warning, read
+- [ ] ⚠️ **Near-loss**: Yoga Mat — warning, unread
+- [ ] ⚠️ **Approaching overstock**: Desk Stand — warning, read
+- [ ] ⚠️ **Return spike**: Wireless Earbuds — warning, unread
+- [ ] ⚠️ **Near-loss**: Notebook A5 — warning, unread
+- [ ] 🔴 **Out of stock**: Water Bottle — critical, unread
+- [ ] ⚠️ **Fee discrepancy**: Desk Stand — warning, unread
+
+### Test 6.4 — Alert Filtering
+Click each filter tab
+- [ ] Loss-Makers tab: shows loss_maker alerts only (Phone Case, LED Bulb, Yoga Mat, Notebook)
+- [ ] Storage tab: shows storage_warning alerts (Baby Monitor, LED Bulb, Desk Stand)
+- [ ] All tab: shows all 12 alerts
+
+### Test 6.5 — Mark Alert as Read
+Click "Mark as read" on an unread alert
+- [ ] Title changes from bold to normal weight
+- [ ] "Mark as read" button disappears
 - [ ] Bell badge count decrements by 1
 
-### Test 4.6 — Mark All Read
-
-1. Click "Mark all read" button at the top
-
-**Pass criteria:**
-- [ ] All alerts become read (no bold titles, no individual "Mark as read" buttons)
-- [ ] "Mark all read" button disappears
+### Test 6.6 — Mark All Read
+Click "Mark all read"
+- [ ] All alerts become read
 - [ ] Bell badge disappears or shows 0
 
 ---
 
-## Phase 5: COGS Management Testing
+## Phase 7: COGS Management
 
-### Test 5.1 — COGS Page Layout
-
-1. Navigate to `/dashboard/cogs` via sidebar
-
-**Pass criteria:**
-- [ ] Page title "Cost of Goods (COGS)" visible
+### Test 7.1 — COGS Page Layout
+Navigate to COGS via sidebar
+- [ ] "Cost of Goods (COGS)" heading visible
 - [ ] "Why COGS matters" info banner visible
-- [ ] Two tabs: Products and CSV Import
-- [ ] Products tab is active by default
-- [ ] Table shows all 12 products
+- [ ] Two tabs: **Products** and **CSV Import**
+- [ ] Products tab shows all 14 products
 
-### Test 5.2 — Inline COGS Editing
+### Test 7.2 — COGS Status Indicators
+Observe the COGS source badges
+- [ ] Products with ✓ **Manual**: Braai Tongs, Rooibos Cream, Biltong, Earbuds, Safari Puzzle, Camping Chair, Baby Monitor, Garden Umbrella, Phone Case, Water Bottle
+- [ ] Products with ⚠ **Estimated**: Yoga Mat, Desk Stand, LED Bulb, Notebook A5
 
-1. Find a product with ⚠ Estimated COGS
-2. Click the COGS (R) field and enter a new value (e.g. 50.00)
-3. Enter an Inbound (R) value (e.g. 15.00)
-4. Save
-
-**Pass criteria:**
+### Test 7.3 — Inline COGS Editing
+Find Yoga Mat (estimated COGS) → edit COGS field to 180.00 and inbound to 30.00 → save
 - [ ] Fields are editable inline
-- [ ] Row highlights/changes colour while unsaved
+- [ ] Row highlights while unsaved
 - [ ] Save succeeds without error
-- [ ] COGS source badge changes from ⚠ Estimated to ✓ Manual
-- [ ] After save, navigating to Dashboard shows updated margins for that product
+- [ ] Badge changes from ⚠ Estimated → ✓ Manual
+- [ ] Navigating to Dashboard shows updated margin for Yoga Mat
 
-### Test 5.3 — COGS CSV Import Tab
+### Test 7.4 — COGS Import: Download Excel Template
+Click the **CSV Import** tab → click **Excel (.xlsx)** button
+- [ ] Excel file `percepta-cogs-template.xlsx` downloads
+- [ ] Open in Excel: Row 1 is a blue info banner
+- [ ] Row 2 has column headers — grey (read-only), yellow (editable)
+- [ ] Yellow columns: "★ Your Cost / COGS (R)" and "★ Inbound Cost (R)"
+- [ ] Grey columns: Offer ID, SKU, Title, Current Price pre-filled with product data
+- [ ] Header row is frozen (stays visible when scrolling)
+- [ ] All 14 products listed (Water Bottle COGS filled, Notebook COGS filled)
 
-1. Click the **CSV Import** tab
+### Test 7.5 — COGS Import: Download CSV Template
+Click **CSV** button (secondary)
+- [ ] CSV file `percepta-cogs-template.csv` downloads
+- [ ] Open in a text editor: header row has offer_id, sku, title, current_price_rands, cogs_rands, inbound_cost_rands
+- [ ] All 14 products listed
 
-**Pass criteria:**
-- [ ] Upload area visible with instructions
-- [ ] "Download Template" button available (downloads pre-filled CSV)
+### Test 7.6 — COGS Import: Upload Excel File
+Fill in COGS values in the downloaded Excel template → save → drag onto upload zone
+- [ ] Drop zone accepts `.xlsx` files
+- [ ] File name shows in the drop zone
+- [ ] "Accepts .xlsx or .csv" hint text visible
+- [ ] Preview table shows matched products with updated COGS values
+- [ ] Unmatched rows (if any) show "Skip" badge
+- [ ] "Import N products" button enabled
+
+### Test 7.7 — COGS Import: Upload CSV File
+Take the downloaded CSV → edit 3 COGS values → save → upload
+- [ ] Drop zone accepts `.csv` files
+- [ ] Parsing succeeds; preview shows 3 matched products
+- [ ] Commit import → "Import complete!" success message
+- [ ] Count shows correct number of updated products
+- [ ] Navigate to Dashboard: margins updated for edited products
+
+### Test 7.8 — COGS Import: Invalid File Handling
+Upload a file with `offer_id` column missing
+- [ ] Parse error shown: "Missing required columns: offer_id, cogs_rands"
+- [ ] No import button shown
+- [ ] User can try again without page refresh
 
 ---
 
-## Phase 6: Fee Audit Testing
+## Phase 8: Fee Audit
 
-### Test 6.1 — Fee Audit Page Layout
-
-1. Navigate to `/dashboard/fee-audit` via sidebar
-
-**Pass criteria:**
-- [ ] Page title "Fee Audit" visible
-- [ ] Tab navigation: Import Sales Report, Fee Discrepancies, By Product, Insights, Import History
-- [ ] Import Sales Report tab active by default
+### Test 8.1 — Fee Audit Page Layout
+Navigate to **Fee Audit** via sidebar
+- [ ] Tabs: Import Sales Report, Fee Discrepancies, By Product, Insights, Import History
 - [ ] "Why import your sales report?" info banner visible
 - [ ] Upload drop zone visible
 
-### Test 6.2 — CSV Upload Preview
+### Test 8.2 — CSV Upload Preview
+Drag `packages/api/fixtures/sample-sales-report.csv` onto upload zone
+- [ ] "Parsing [filename]..." message appears
+- [ ] Preview shows matched orders (> 0), unmatched (may be 0–small)
+- [ ] Fee summary grid (Success Fees, Fulfilment Fees, etc.) with Rand amounts
+- [ ] "Import [N] Orders" button enabled
 
-1. Drag and drop `packages/api/fixtures/sample-sales-report.csv` onto the upload zone (or click to browse and select it)
-2. Wait for parsing
-
-**Pass criteria:**
-- [ ] "Parsing [filename]..." loading message appears
-- [ ] Preview screen shows:
-  - File name and row count
-  - Matched orders (green) — should be > 0
-  - Unmatched orders (grey) — may be 0 or small
-  - Fee summary grid (Success Fees, Fulfilment Fees, etc.) with rand amounts
-- [ ] "Import [N] Orders" button is enabled
-- [ ] "Cancel" button available
-
-### Test 6.3 — CSV Import Commit
-
-1. Click **Import [N] Orders**
-
-**Pass criteria:**
-- [ ] Success screen appears: "Import Complete"
-- [ ] Shows "Updated N orders with actual fees and ship dates"
+### Test 8.3 — CSV Import Commit
+Click **Import [N] Orders**
+- [ ] "Import Complete" success screen
+- [ ] "Updated N orders with actual fees and ship dates"
 - [ ] "Import Another Report" button visible
-- [ ] Note about profit recalculation queued
 
-### Test 6.4 — Fee Discrepancies Tab
-
-1. Click the **Fee Discrepancies** tab
-
-**Pass criteria:**
-- [ ] Summary cards at the top: Total Discrepancies, Net Impact, Overcharged, Undercharged
-- [ ] At least 2-3 discrepancies listed (from the intentionally mismatched CSV fees)
+### Test 8.4 — Fee Discrepancies Tab
+Click **Fee Discrepancies** tab
+- [ ] Summary cards: Total Discrepancies, Net Impact, Overcharged, Undercharged
+- [ ] At least 2–3 discrepancies (from intentionally mismatched CSV fees)
 - [ ] Table shows: Product, Order #, Date, Fee Type, Actual, Calculated, Difference, % Off, Status
-- [ ] Difference column: red for overcharge, green for undercharge
-- [ ] All discrepancies have "Open" status by default
+- [ ] Overcharged difference shown in red
+- [ ] **Desk Stand** order appears with ~R8.76 overcharge on success fee
 
-### Test 6.5 — Resolve a Discrepancy
+### Test 8.5 — Resolve a Discrepancy
+Click **Resolve** on any open discrepancy → select "Acknowledged"
+- [ ] Status changes to "Acknowledged" (green)
+- [ ] Summary card "Open" count decrements
 
-1. Click **Resolve** on any open discrepancy
-2. Select "Acknowledged"
-3. Optionally add a note
-
-**Pass criteria:**
-- [ ] Status changes from "Open" (amber) to "Acknowledged" (green)
-- [ ] Summary cards update (open count decreases)
-
-### Test 6.6 — Bulk Discrepancy Action
-
-1. Tick the header checkbox to select all visible rows
-2. Click **Dispute All**
-
-**Pass criteria:**
-- [ ] Bulk action bar appears showing "[N] selected"
+### Test 8.6 — Bulk Action
+Tick header checkbox → click **Dispute All**
+- [ ] Bulk action bar shows "[N] selected"
 - [ ] All selected discrepancies change to "Disputed" (red badge)
 
-### Test 6.7 — Discrepancy Filters
+### Test 8.7 — Export CSV
+Click **Export CSV**
+- [ ] CSV file downloads with correct columns and data
 
-1. Use the Status dropdown to filter by "Disputed"
-2. Use the Fee Type dropdown to filter by "Success Fee"
-
-**Pass criteria:**
-- [ ] Table filters correctly to match selected criteria
-- [ ] Changing filter to "All" restores full list
-
-### Test 6.8 — Export CSV
-
-1. Click **Export CSV** button
-
-**Pass criteria:**
-- [ ] CSV file downloads to browser
-- [ ] File contains the correct columns and data matching the visible discrepancies
-
-### Test 6.9 — By Product Tab
-
-1. Click the **By Product** tab
-
-**Pass criteria:**
-- [ ] Products with discrepancies listed with aggregated totals
-- [ ] Shows: Product, Total Discrepancies, Open Count, Overcharged, Undercharged, Net Impact
-
-### Test 6.10 — Insights Tab
-
-1. Click the **Insights** tab
-
-**Pass criteria:**
-- [ ] Charts visible: discrepancies by fee type, discrepancies by week
-- [ ] Charts render with data (not empty)
-
-### Test 6.11 — Import History Tab
-
-1. Click the **Import History** tab
-
-**Pass criteria:**
-- [ ] At least 1 import record visible from the import done in Test 6.3
-- [ ] Shows: filename, date, row count, matched count
+### Test 8.8 — Fee Audit: Returned Orders Not Counted
+- [ ] Returned orders (Earbuds full return, Safari Puzzle return) do NOT appear in fee discrepancy list
+- [ ] Fee discrepancies only show for delivered/shipped orders with actual fee data
 
 ---
 
-## Phase 7: Notification Settings Testing
+## Phase 9: Notification Settings
 
-### Test 7.1 — Notifications Page Layout
+### Test 9.1 — Preferences Layout
+Navigate to **Notifications** via sidebar
+- [ ] Toggle "Weekly Profit Report" (default: ON)
+- [ ] Toggle "Real-Time Loss Alerts" (default: ON)
+- [ ] Margin threshold input (default: 15%)
+- [ ] "Save Preferences" button
 
-1. Navigate to `/dashboard/notifications` via sidebar
+### Test 9.2 — Toggle & Save
+Toggle Weekly Profit Report OFF → change threshold to 20 → click Save
+- [ ] Green "Preferences saved" confirmation appears
+- [ ] Refresh page → Weekly OFF, threshold = 20 persisted
 
-**Pass criteria:**
-- [ ] Page title or heading for notification preferences visible
-- [ ] Toggle for "Weekly Profit Report" visible (default: ON)
-- [ ] Toggle for "Real-Time Loss Alerts" visible (default: ON)
-- [ ] Margin threshold input visible (default: 15%)
-- [ ] "Save Preferences" button visible
-
-### Test 7.2 — Toggle Preferences
-
-1. Toggle "Weekly Profit Report" OFF
-2. Toggle "Real-Time Loss Alerts" OFF
-3. Observe margin threshold input
-
-**Pass criteria:**
-- [ ] Toggles switch visually
-- [ ] Margin threshold input becomes disabled when Loss Alerts is OFF
-- [ ] Changes are NOT auto-saved (button still needed)
-
-### Test 7.3 — Save Preferences
-
-1. Toggle Weekly Profit Report back ON
-2. Change margin threshold to 20
-3. Click **Save Preferences**
-
-**Pass criteria:**
-- [ ] Green "Preferences saved" confirmation appears for ~3 seconds
-- [ ] Refreshing the page shows the saved values (Weekly ON, threshold = 20)
-
-### Test 7.4 — Unsubscribe URL Handling
-
-1. Navigate directly to: `http://localhost:5173/dashboard/notifications?disable=emailWeeklyDigest`
-
-**Pass criteria:**
-- [ ] Weekly Profit Report toggle automatically switches to OFF
-- [ ] Preferences are saved automatically
-- [ ] "Preferences saved" confirmation appears
-- [ ] URL query param is removed from the address bar
+### Test 9.3 — Unsubscribe URL
+Navigate to `http://localhost:5173/dashboard/notifications?disable=emailWeeklyDigest`
+- [ ] Weekly Profit Report auto-toggles to OFF
+- [ ] Saved automatically; "Preferences saved" appears
+- [ ] Query param removed from URL
 
 ---
 
-## Phase 8: Sync Pipeline Testing (DEMO_MODE)
+## Phase 10: Sync Pipeline (DEMO_MODE)
 
-> Requires `DEMO_MODE=true` in `.env`
+### Test 10.1 — Trigger Manual Sync
+Trigger sync via UI or API:
+```bash
+curl -X POST http://localhost:3001/api/sync/trigger \
+  -H "Authorization: Bearer <token>"
+```
+- [ ] Sync completes without real Takealot API call
+- [ ] MockTakealotClient serves 14 offers and orders
+- [ ] Dashboard data consistent after re-sync
 
-### Test 8.1 — Trigger Manual Sync
-
-1. From the dashboard or sync UI, trigger a sync (or use the API directly)
-
-**Pass criteria:**
-- [ ] Sync starts without errors (no real Takealot API call made)
-- [ ] MockTakealotClient serves 12 offers and ~180 orders
-- [ ] Sync status shows progress and completes successfully
-- [ ] Dashboard data remains consistent after re-sync
-
-### Test 8.2 — Webhook Processing
-
-1. Open a terminal and run:
+### Test 10.2 — Webhook: New Order
 ```bash
 curl -X POST http://localhost:3001/api/webhooks/takealot/00000000-0000-4000-a000-000000000001 \
   -H "Content-Type: application/json" \
   -d @packages/api/fixtures/webhook-new-order.json
 ```
-
-**Pass criteria:**
-- [ ] Returns `{ "received": true }` with HTTP 200
-- [ ] New order appears in the database
-- [ ] Profit calculation job is queued and completes
+- [ ] Returns `{ "received": true }` HTTP 200
+- [ ] New order appears in DB
+- [ ] Profit calculation job queued and completes
 - [ ] Dashboard numbers update on next refresh
 
----
-
-## Phase 9: Real-Time Updates Testing
-
-### Test 9.1 — Live Connection Indicator
-
-1. Observe the top bar while logged in
-
-**Pass criteria:**
-- [ ] "Live" badge (green) visible, confirming WebSocket connection
-- [ ] If you stop the API server, badge changes to "Offline" (grey)
-- [ ] Restarting the API server causes automatic reconnection → badge returns to "Live"
+### Test 10.3 — Webhook: Status Change (Shipped → Delivered)
+```bash
+curl -X POST http://localhost:3001/api/webhooks/takealot/00000000-0000-4000-a000-000000000001 \
+  -H "Content-Type: application/json" \
+  -d @packages/api/fixtures/webhook-status-changed.json
+```
+- [ ] Returns `{ "received": true }` HTTP 200
+- [ ] Order status updated from "Shipped" to "Delivered" in DB
 
 ---
 
-## Phase 10: Navigation & UI Polish
+## Phase 11: Real-Time Updates
 
-### Test 10.1 — Sidebar Navigation
+### Test 11.1 — Live Connection Badge
+Observe top bar while logged in
+- [ ] Green "Live" badge visible (WebSocket connected)
+- [ ] Stopping API → badge changes to "Offline"
+- [ ] Restarting API → badge returns to "Live" automatically
 
-1. Click each item in the sidebar: Dashboard, Alerts, COGS, Fee Audit, Notifications
+---
 
-**Pass criteria:**
-- [ ] Each click navigates to the correct page
-- [ ] Active page is highlighted in the sidebar
+## Phase 12: Navigation & UI Polish
+
+### Test 12.1 — Sidebar Navigation
+Click each sidebar item: Dashboard, Inventory, Alerts, COGS, Fee Audit, Notifications
+- [ ] Each navigates to correct page
+- [ ] Active page highlighted in sidebar
 - [ ] No broken links or 404 errors
 
-### Test 10.2 — Settings / Notifications Navigation
-
-1. Click the settings gear icon in the top bar
-
-**Pass criteria:**
-- [ ] Navigates to `/dashboard/notifications`
-
-### Test 10.3 — Page Loading States
-
-1. Hard refresh (Ctrl+Shift+R) on the Dashboard page
-2. Observe loading states
-
-**Pass criteria:**
-- [ ] Skeleton placeholders or loading spinners appear briefly
+### Test 12.2 — Page Loading States
+Hard refresh on Dashboard (Ctrl+Shift+R)
+- [ ] Skeleton placeholders or spinners appear briefly
 - [ ] Data loads and replaces placeholders
 - [ ] No layout shift after data loads
 
 ---
 
-## Phase 11: Sign Out & Session
+## Phase 13: Session Management
 
-### Test 11.1 — Session Persistence
+### Test 13.1 — Session Persistence
+Close browser tab → reopen `http://localhost:5173/dashboard`
+- [ ] Still logged in (refresh token active)
+- [ ] Dashboard loads without re-login
 
-1. Close the browser tab
-2. Reopen `http://localhost:5173/dashboard`
-
-**Pass criteria:**
-- [ ] User is still logged in (refresh token active)
-- [ ] Dashboard loads without needing to re-login
-
-### Test 11.2 — Sign Out
-
-1. Click the sign-out / logout button
-
-**Pass criteria:**
+### Test 13.2 — Sign Out
+Click logout
 - [ ] Redirects to `/login`
-- [ ] Navigating to `/dashboard` redirects back to `/login`
-- [ ] Token is cleared from local storage
+- [ ] `/dashboard` redirects back to `/login`
+- [ ] Token cleared from local storage
 
 ---
 
-## Phase 12: Re-Seed Idempotency
+## Phase 14: Re-Seed Idempotency
 
-### Test 12.1 — Re-run Seed Script
-
-1. Stop the API server
-2. Run `npm run seed` again
-3. Restart the API server
-4. Login and check dashboard
-
-**Pass criteria:**
-- [ ] Seed completes without errors
-- [ ] Same counts as first run (12 products, ~180 orders, 8 alerts)
-- [ ] No duplicate data in the dashboard
-- [ ] All features work identically to the first run
+### Test 14.1 — Re-run Seed
+```bash
+npm run seed   # run twice
+```
+- [ ] Completes without errors both times
+- [ ] Same counts: 14 products, 201 orders, 12 alerts
+- [ ] No duplicate data in dashboard
+- [ ] All features work identically
 
 ---
+
 ---
 
 # Testing Checklist Summary
@@ -887,66 +717,77 @@ curl -X POST http://localhost:3001/api/webhooks/takealot/00000000-0000-4000-a000
 | # | Feature Area | Test | Pass Criteria |
 |---|-------------|------|---------------|
 | **SETUP** | | | |
-| 1 | Docker | Start PostgreSQL + Redis | `docker ps` shows 2 healthy containers |
-| 2 | Migrations | Run DB migrations | All migrations applied, no errors |
-| 3 | Seed | Run seed script | "✅ Seeded: 1 seller, 12 products, ~180 orders, 8 alerts" |
-| 4 | Health | GET /api/health | `{ status: "ok", checks: { database: "ok", redis: "ok" } }` |
+| 1 | Migrations | Run DB migrations | All applied, no errors |
+| 2 | Seed | Run seed script | 14 products, 201 orders, 12 alerts, 18 edge cases |
+| 3 | API startup | Start API | `🚀 Percepta API running`, workers started |
 | **AUTH** | | | |
-| 5 | Register UI | Load register page | All form fields, button, footer text visible |
-| 6 | Validation | Submit empty/invalid form | Appropriate error messages shown |
-| 7 | Register | Create new account | Redirects to /onboarding, no errors |
-| 8 | Login | Login as demo user | Redirects to /dashboard |
-| 9 | Bad login | Login with wrong password | "Invalid email or password" error shown |
+| 4 | Login UI | Load login page | Fields, button, tagline visible |
+| 5 | Demo login | Login as demo user | Redirects to /dashboard |
+| 6 | Bad login | Wrong password | Error message; stays on login |
+| 7 | Register | Create new account | Redirects to /onboarding |
 | **DASHBOARD** | | | |
-| 10 | Layout | View dashboard | 4 KPI cards, product table, fee chart all visible |
-| 11 | KPI cards | Check scorecard values | All 4 cards show data with trends; margin is colour-coded |
-| 12 | Loss-makers | Check loss-maker count | ≥ 2 loss-makers shown with Alert badge |
-| 13 | Period 7d | Switch to 7d | Numbers decrease; trend recalculates |
-| 14 | Period 90d | Switch to 90d | Numbers increase; more orders visible |
-| 15 | Custom period | Set custom date range | Data filtered to exact window |
-| 16 | Product sort | Sort by Revenue | Table re-orders correctly; sort arrow visible |
-| 17 | Product search | Search "Braai" | Table filters to matching product(s) |
-| 18 | Fee waterfall | Click product row | Expanded breakdown: price → fees → COGS → profit |
-| 19 | Fee summary | Scroll to fee chart | Bar chart + detail table with fee types and percentages |
-| 20 | Default sort | Check initial sort order | Loss-makers (red badge) at top of table |
+| 8 | Layout | View dashboard | 4 KPI cards, table, fee chart, sidebar |
+| 9 | KPI cards | Check scorecard values | All 4 populated with colour-coding |
+| 10 | Loss-makers count | Check loss-maker KPI | ≥ 2 loss-makers (Phone Case, LED Bulb) |
+| 11 | Default sort | Product table on load | Loss-makers at top |
+| 12 | Period selector | Switch 7d/30d/90d/Custom | Numbers change correctly per period |
+| 13 | Product sort | Click column headers | Re-sorts; asc/desc toggle; arrow indicator |
+| 14 | Product search | Type "Braai" | Filters to match; count updates |
+| 15 | Out-of-stock row | Find Water Bottle | 0 units, R0 revenue in 30d |
+| 16 | Fee waterfall | Click product row | Waterfall with all 8 steps; net profit matches table |
+| 17 | Per-unit label | Multi-unit order | "Per unit · order qty: N" label shown |
+| 18 | Fee chart | Scroll to fee summary | Bar chart with 4 fee types; table with totals |
+| **RETURNS & REVERSALS** | | | |
+| 19 | Returned orders excluded | Earbuds 90d profit | Returned order (R899) not in profit totals |
+| 20 | Return spike alert | Alerts page | "High return rate: Earbuds" warning alert |
+| 21 | Return Requested excluded | Baby Monitor | Pending return order not in fee calculations |
+| 22 | Cancelled excluded | Camping Chair | Cancelled order not in revenue totals |
+| 23 | Out-of-stock product | Water Bottle in table | 0 sales, historical orders in 90d |
+| 24 | Out-of-stock alert | Alerts page | Critical "Out of stock: Water Bottle" alert |
+| **INVENTORY** | | | |
+| 25 | Inventory page | Navigate via sidebar | Table with 14 products, DC columns, status badges |
+| 26 | Overstocked badges | Baby Monitor, LED Bulb | ⚠️ Overstocked badge shown |
+| 27 | Out-of-stock badge | Water Bottle | 🔴 Out of Stock badge; 0 across all DCs |
+| 28 | Low stock | Yoga Mat (5d), Puzzle (8d) | Low stock indicator visible |
+| 29 | Stock cover sort | Sort by Stock Cover | Overstocked products at top descending |
+| 30 | Multi-DC display | Biltong Box | JHB 40, CPT 20 both shown |
 | **ALERTS** | | | |
-| 21 | Bell badge | Check bell icon | Unread count badge visible |
-| 22 | Alerts page | Navigate to alerts | Cards with coloured borders, titles, messages, dates |
-| 23 | Filter tabs | Click Loss-Makers, Storage | Shows only matching alert type |
-| 24 | Mark read | Click "Mark as read" | Alert de-emphasized; badge decrements |
-| 25 | Mark all | Click "Mark all read" | All alerts read; badge clears |
+| 31 | Bell badge | Top bar | Unread count badge ≥ 5 |
+| 32 | All 12 alert types | Alerts page | All 12 seeded alerts visible |
+| 33 | Filter tabs | Loss-Makers, Storage | Correct alerts shown per tab |
+| 34 | Mark read | Click "Mark as read" | Alert de-emphasized; badge decrements |
+| 35 | Mark all | "Mark all read" | Badge clears; all alerts read |
 | **COGS** | | | |
-| 26 | COGS page | Navigate to COGS | 12 products listed with ⚠/✓ badges |
-| 27 | Inline edit | Change COGS value | Saves successfully; badge changes to ✓ Manual |
-| 28 | Profit update | Check dashboard after COGS edit | Margin recalculated for affected product |
+| 36 | COGS page | Navigate | 14 products with ⚠/✓ badges |
+| 37 | Estimated badges | Yoga Mat, Desk Stand, etc. | ⚠ Estimated shown for 4 products |
+| 38 | Inline edit | Change COGS value | Saves; badge → ✓ Manual |
+| 39 | Excel template | Download .xlsx | Formatted file: yellow editable cols, grey read-only, frozen row |
+| 40 | CSV template | Download .csv | Header + 14 product rows |
+| 41 | Excel upload | Upload filled .xlsx | Auto-detected as xlsx; parses; preview shown |
+| 42 | CSV upload | Upload filled .csv | Parses correctly; preview shown |
+| 43 | Commit import | Click "Import N products" | Success screen; margins update in dashboard |
+| 44 | Invalid upload | Upload file without offer_id | Parse error shown clearly |
 | **FEE AUDIT** | | | |
-| 29 | Upload CSV | Drop sample CSV file | Preview shows matched orders, fee summary |
-| 30 | Import | Click "Import N Orders" | Success screen: "Import Complete" |
-| 31 | Discrepancies | View discrepancies tab | ≥ 2 discrepancies with Actual vs Calculated columns |
-| 32 | Resolve | Acknowledge a discrepancy | Status changes to "Acknowledged" (green) |
-| 33 | Bulk action | Select all → Dispute All | All selected change to "Disputed" (red) |
-| 34 | Filters | Filter by status/fee type | Table filters correctly |
-| 35 | Export | Click Export CSV | CSV file downloads with correct data |
-| 36 | By Product | View By Product tab | Aggregated discrepancy totals per product |
-| 37 | Insights | View Insights tab | Charts render with data |
-| 38 | Import History | View Import History tab | At least 1 import record visible |
+| 45 | Upload CSV | Drop sample-sales-report.csv | Preview: matched orders, fee summary |
+| 46 | Import commit | Click "Import N Orders" | Success screen |
+| 47 | Discrepancies | View discrepancies tab | ≥ 2–3 discrepancies; Desk Stand overcharge visible |
+| 48 | Returned orders excluded | Check discrepancy list | No returned orders in discrepancy table |
+| 49 | Resolve | Acknowledge discrepancy | Status → Acknowledged (green) |
+| 50 | Bulk action | Select all → Dispute | All → Disputed (red) |
+| 51 | Export CSV | Click Export | CSV downloads with correct data |
 | **NOTIFICATIONS** | | | |
-| 39 | Preferences UI | Navigate to notifications | Toggles and threshold input visible |
-| 40 | Toggle OFF | Disable weekly digest | Toggle switches; threshold input disabled when alerts OFF |
-| 41 | Save | Save changed preferences | Green "Preferences saved" confirmation |
-| 42 | Persist | Refresh page | Saved values persisted |
-| 43 | Unsubscribe URL | Visit ?disable=emailWeeklyDigest | Auto-toggles OFF and saves |
-| **SYNC (DEMO_MODE)** | | | |
-| 44 | Trigger sync | Trigger manual sync | Completes without real API call; data consistent |
-| 45 | Webhook | POST fixture JSON | Returns 200; new order processed |
+| 52 | Preferences UI | Navigate | Toggles + threshold + save button |
+| 53 | Save | Change and save | Persisted on refresh |
+| 54 | Unsubscribe URL | ?disable=emailWeeklyDigest | Auto-toggles OFF and saves |
+| **SYNC** | | | |
+| 55 | Manual sync | Trigger sync | Completes via MockTakealotClient |
+| 56 | New order webhook | POST webhook-new-order.json | 200 OK; order processed |
+| 57 | Status change webhook | POST webhook-status-changed.json | 200 OK; status updated |
 | **REAL-TIME** | | | |
-| 46 | Live badge | Check top bar | Green "Live" badge visible |
-| 47 | Reconnect | Stop/restart API | Badge goes Offline → reconnects → Live |
-| **NAVIGATION** | | | |
-| 48 | Sidebar | Click all nav items | Each navigates to correct page; active highlighted |
-| 49 | Loading states | Hard refresh dashboard | Skeletons/spinners shown then replaced by data |
+| 58 | Live badge | Check top bar | Green "Live" badge visible |
+| 59 | Reconnect | Stop/restart API | Offline → reconnects → Live |
 | **SESSION** | | | |
-| 50 | Persistence | Close and reopen tab | Still logged in via refresh token |
-| 51 | Sign out | Click logout | Redirects to /login; /dashboard redirects to /login |
+| 60 | Persistence | Close and reopen tab | Still logged in |
+| 61 | Sign out | Click logout | Redirects to /login |
 | **IDEMPOTENCY** | | | |
-| 52 | Re-seed | Run `npm run seed` twice | Same counts, no duplicates, all features work |
+| 62 | Re-seed | Run `npm run seed` twice | Same counts; no duplicates |

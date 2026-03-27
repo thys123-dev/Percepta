@@ -182,3 +182,29 @@ export function useFeeSummary(params: PeriodParams) {
     staleTime: 5 * 60_000, // matches Redis TTL
   });
 }
+
+// =============================================================================
+// Revenue Target
+// =============================================================================
+
+export interface RevenueTargetData {
+  targetSet: boolean;
+  targetCents?: number;
+  currentRevenueCents?: number;
+  percentComplete?: number;
+  daysInMonth?: number;
+  currentDay?: number;
+  daysRemaining?: number;
+  dailyPaceNeededCents?: number;
+  currentDailyAvgCents?: number;
+  projectedCents?: number;
+}
+
+export function useRevenueTarget() {
+  return useQuery<RevenueTargetData>({
+    queryKey: ['revenue-target'],
+    queryFn: () =>
+      api.get<RevenueTargetData>('/sellers/revenue-target').then((r) => r.data),
+    staleTime: 5 * 60_000,
+  });
+}

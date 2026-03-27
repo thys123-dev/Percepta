@@ -5,6 +5,20 @@
  * and MockTakealotClient. Data is designed to exercise every fee path and
  * produce a realistic, varied dashboard.
  *
+ * Edge cases covered:
+ *  - Returns (Returned, Return Requested) with reversal amounts
+ *  - Cancelled orders with cancellation penalty
+ *  - Multi-unit orders (qty 2, 3, 5)
+ *  - Daily Deal promotions
+ *  - IBT cross-region transfers (JHB→CPT, CPT→JHB, JHB→DBN)
+ *  - Loss-making products with high volume
+ *  - Near-zero margin products
+ *  - Overstock / storage fee products
+ *  - COGS = estimated (no manual input)
+ *  - Zero-stock product (discontinued / out of stock)
+ *  - Products with actual CSV fee data (for reconciliation)
+ *  - Products with reversal (return) that wiped all profit
+ *
  * All prices in CENTS unless noted otherwise.
  */
 
@@ -36,7 +50,7 @@ export function createPrng(seed: number) {
 }
 
 // =============================================================================
-// Product Definitions (12 products)
+// Product Definitions (14 products — includes 2 new edge-case products)
 // =============================================================================
 
 export interface DemoProduct {
@@ -340,6 +354,54 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     stockDbn: 0,
     salesUnits30d: 6,
   },
+  // ── Edge-case product 13: ZERO STOCK / discontinued ─────────────────────────
+  {
+    offerId: 100013,
+    tsin: 200013,
+    sku: 'KG-WATER-BOTTLE-SS',
+    barcode: '6001234500013',
+    title: 'Stainless Steel Water Bottle 750ml',
+    category: 'Sport',
+    sellingPriceCents: 24900,
+    rrpCents: 29900,
+    weightGrams: 350,
+    lengthMm: 280,
+    widthMm: 90,
+    heightMm: 90,
+    volumeCm3: 2300,
+    cogsCents: 8715,    // 35%
+    cogsSource: 'manual',
+    inboundCostCents: 900,
+    stockCoverDays: 0,  // ⚠️ Sold out / discontinued
+    stockJhb: 0,
+    stockCpt: 0,
+    stockDbn: 0,
+    salesUnits30d: 0,
+  },
+  // ── Edge-case product 14: NEAR-ZERO margin, estimate COGS ───────────────────
+  {
+    offerId: 100014,
+    tsin: 200014,
+    sku: 'KG-NOTEBOOK-A5',
+    barcode: '6001234500014',
+    title: 'Premium Notebook A5 Hardcover',
+    category: 'Stationery',
+    sellingPriceCents: 7900,
+    rrpCents: 9900,
+    weightGrams: 300,
+    lengthMm: 210,
+    widthMm: 150,
+    heightMm: 20,
+    volumeCm3: 630,
+    cogsCents: 3950,    // 50% of price — barely breaks even after fees
+    cogsSource: 'estimate',
+    inboundCostCents: 600,
+    stockCoverDays: 22,
+    stockJhb: 120,
+    stockCpt: 0,
+    stockDbn: 0,
+    salesUnits30d: 14,
+  },
 ];
 
 // =============================================================================
@@ -362,16 +424,62 @@ export function classifyWeightTier(weightGrams: number): string {
 }
 
 // =============================================================================
-// Order Generation
+// Order Types
+// =============================================================================
+
+export type EdgeCaseTag =
+  | 'return_full'           // Fully returned — saleStatus = Returned + reversalAmountCents set
+  | 'return_requested'      // Return requested but not yet processed
+  | 'cancelled'             // Cancelled before dispatch
+  | 'multi_unit'            // qty >= 2
+  | 'daily_deal'            // Sold under a Daily Deal promotion
+  | 'ibt_cross_region'      // IBT penalty applies
+  | 'reversal_wiped_profit' // Reversal amount = full selling price (refund)
+  | 'actual_fees_csv'       // Has actual fee data (as if imported from CSV)
+  | 'partial_return'        // Has a partial reversal (partial refund scenario)
+  | 'normal';
+
+export interface DemoOrder {
+  orderId: number;
+  orderItemId: number;
+  offerId: number;
+  tsin: number;
+  sku: string;
+  productTitle: string;
+  quantity: number;
+  sellingPriceCents: number; // total (unit × qty)
+  unitPriceCents: number;
+  orderDate: Date;
+  saleStatus: string;
+  fulfillmentDc: string;
+  customerDc: string;
+  isIbt: boolean;
+  promotion: string;
+  // Return / reversal fields
+  reversalAmountCents?: number;
+  hasReversal?: boolean;
+  // Actual CSV fee fields (fee audit reconciliation)
+  dateShippedToCustomer?: Date;
+  grossSalesCents?: number;
+  actualSuccessFeeCents?: number;
+  actualFulfilmentFeeCents?: number;
+  actualStockTransferFeeCents?: number;
+  netSalesAmountCents?: number;
+  // Tag for seeding logic
+  tags: EdgeCaseTag[];
+}
+
+// =============================================================================
+// Weighted Order Generation — Random Baseline Orders
 // =============================================================================
 
 const SALE_STATUSES = [
-  { status: 'Shipped', weight: 70 },
-  { status: 'Delivered', weight: 10 },
-  { status: 'Accepted', weight: 8 },
-  { status: 'Returned', weight: 5 },
-  { status: 'Cancelled', weight: 4 },
-  { status: 'Return Requested', weight: 3 },
+  { status: 'Shipped',          weight: 55 },
+  { status: 'Delivered',        weight: 20 },
+  { status: 'Accepted',         weight: 8 },
+  { status: 'Returned',         weight: 7 },
+  { status: 'Cancelled',        weight: 5 },
+  { status: 'Return Requested', weight: 5 },
 ];
 
 const DC_CONFIGS = [
@@ -417,25 +525,354 @@ const PRODUCT_ORDER_WEIGHTS: Record<number, number> = {
   100010: 2,   // Desk Stand — slow
   100011: 30,  // Phone Case — very high volume (loss-maker)
   100012: 5,   // LED Bulb — moderate (loss-maker)
+  100013: 0,   // Water Bottle — no random orders (out of stock, edge cases only)
+  100014: 8,   // Notebook — near-zero margin
 };
 
-export interface DemoOrder {
-  orderId: number;
-  orderItemId: number;
-  offerId: number;
-  tsin: number;
-  sku: string;
-  productTitle: string;
-  quantity: number;
-  sellingPriceCents: number; // total (unit × qty)
-  unitPriceCents: number;
-  orderDate: Date;
-  saleStatus: string;
-  fulfillmentDc: string;
-  customerDc: string;
-  isIbt: boolean;
-  promotion: string;
+function daysAgoDate(days: number, hourOffset = 10): Date {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  d.setHours(hourOffset, Math.floor(Math.random() * 60), 0, 0);
+  return d;
 }
+
+// =============================================================================
+// Hard-coded Edge Case Orders
+// These supplement the random orders to guarantee every scenario is covered.
+// =============================================================================
+
+export function buildEdgeCaseOrders(): DemoOrder[] {
+  let id = 600000;
+  let itemId = 990000;
+  const next = () => ({ orderId: id++, orderItemId: itemId++ });
+
+  const orders: DemoOrder[] = [];
+
+  // ── 1. FULL RETURN — Wireless Earbuds (premium product) ──────────────────
+  // Order placed, shipped, customer returned. Reversal = full selling price.
+  {
+    const { orderId, orderItemId } = next();
+    orders.push({
+      orderId, orderItemId,
+      offerId: 100004, tsin: 200004, sku: 'KG-EARBUDS-PRO',
+      productTitle: 'Wireless Earbuds Pro ZA',
+      quantity: 1, sellingPriceCents: 89900, unitPriceCents: 89900,
+      orderDate: daysAgoDate(5, 9),
+      saleStatus: 'Returned',
+      fulfillmentDc: 'JHB', customerDc: 'JHB', isIbt: false,
+      promotion: '',
+      reversalAmountCents: 89900,   // full refund
+      hasReversal: true,
+      tags: ['return_full', 'reversal_wiped_profit'],
+    });
+  }
+
+  // ── 2. RETURN REQUESTED — Baby Monitor (still pending) ────────────────────
+  {
+    const { orderId, orderItemId } = next();
+    orders.push({
+      orderId, orderItemId,
+      offerId: 100008, tsin: 200008, sku: 'KG-BABY-MON-WIFI',
+      productTitle: 'Baby Monitor WiFi',
+      quantity: 1, sellingPriceCents: 199900, unitPriceCents: 199900,
+      orderDate: daysAgoDate(3, 14),
+      saleStatus: 'Return Requested',
+      fulfillmentDc: 'JHB', customerDc: 'JHB', isIbt: false,
+      promotion: '',
+      tags: ['return_requested'],
+    });
+  }
+
+  // ── 3. CANCELLED ORDER — Camping Chair ────────────────────────────────────
+  {
+    const { orderId, orderItemId } = next();
+    orders.push({
+      orderId, orderItemId,
+      offerId: 100006, tsin: 200006, sku: 'KG-CAMP-CHAIR-DX',
+      productTitle: 'Camping Chair Deluxe',
+      quantity: 1, sellingPriceCents: 149900, unitPriceCents: 149900,
+      orderDate: daysAgoDate(2, 11),
+      saleStatus: 'Cancelled',
+      fulfillmentDc: 'JHB', customerDc: 'JHB', isIbt: false,
+      promotion: '',
+      tags: ['cancelled'],
+    });
+  }
+
+  // ── 4. MULTI-UNIT RETURN — Phone Cases (qty 3, all returned) ─────────────
+  {
+    const { orderId, orderItemId } = next();
+    orders.push({
+      orderId, orderItemId,
+      offerId: 100011, tsin: 200011, sku: 'KG-PHONE-CASE-UT',
+      productTitle: 'Phone Case Ultra Thin',
+      quantity: 3, sellingPriceCents: 29700, unitPriceCents: 9900,
+      orderDate: daysAgoDate(8, 10),
+      saleStatus: 'Returned',
+      fulfillmentDc: 'JHB', customerDc: 'JHB', isIbt: false,
+      promotion: '',
+      reversalAmountCents: 29700, // full reversal for 3 units
+      hasReversal: true,
+      tags: ['return_full', 'multi_unit'],
+    });
+  }
+
+  // ── 5. PARTIAL REVERSAL — Biltong Box (2 units, 1 refunded) ──────────────
+  {
+    const { orderId, orderItemId } = next();
+    orders.push({
+      orderId, orderItemId,
+      offerId: 100003, tsin: 200003, sku: 'KG-BILTONG-1KG',
+      productTitle: 'Biltong Box 1kg Premium',
+      quantity: 2, sellingPriceCents: 59800, unitPriceCents: 29900,
+      orderDate: daysAgoDate(10, 13),
+      saleStatus: 'Delivered',  // delivered but partial refund issued
+      fulfillmentDc: 'CPT', customerDc: 'CPT', isIbt: false,
+      promotion: '',
+      reversalAmountCents: 29900, // only 1 of 2 units refunded
+      hasReversal: true,
+      tags: ['partial_return', 'multi_unit'],
+    });
+  }
+
+  // ── 6. DAILY DEAL — Rooibos Face Cream (high volume, promo price) ─────────
+  {
+    const { orderId, orderItemId } = next();
+    orders.push({
+      orderId, orderItemId,
+      offerId: 100002, tsin: 200002, sku: 'KG-ROOIBOS-CRM-50',
+      productTitle: 'Rooibos Face Cream 50ml',
+      quantity: 5, sellingPriceCents: 99500, unitPriceCents: 19900,
+      orderDate: daysAgoDate(7, 8),
+      saleStatus: 'Delivered',
+      fulfillmentDc: 'CPT', customerDc: 'CPT', isIbt: false,
+      promotion: 'Daily Deal',
+      tags: ['daily_deal', 'multi_unit'],
+    });
+  }
+
+  // ── 7. DAILY DEAL RETURNED — Safari Puzzle sold on deal, then returned ────
+  {
+    const { orderId, orderItemId } = next();
+    orders.push({
+      orderId, orderItemId,
+      offerId: 100005, tsin: 200005, sku: 'KG-SAFARI-PUZZLE',
+      productTitle: 'Kids Safari Puzzle 500pc',
+      quantity: 2, sellingPriceCents: 29800, unitPriceCents: 14900,
+      orderDate: daysAgoDate(15, 9),
+      saleStatus: 'Returned',
+      fulfillmentDc: 'JHB', customerDc: 'JHB', isIbt: false,
+      promotion: 'Daily Deal',
+      reversalAmountCents: 29800,
+      hasReversal: true,
+      tags: ['return_full', 'daily_deal', 'multi_unit'],
+    });
+  }
+
+  // ── 8. IBT CROSS-REGION — Camping Chair JHB→CPT (penalty + high fee) ─────
+  {
+    const { orderId, orderItemId } = next();
+    orders.push({
+      orderId, orderItemId,
+      offerId: 100006, tsin: 200006, sku: 'KG-CAMP-CHAIR-DX',
+      productTitle: 'Camping Chair Deluxe',
+      quantity: 1, sellingPriceCents: 149900, unitPriceCents: 149900,
+      orderDate: daysAgoDate(4, 15),
+      saleStatus: 'Shipped',
+      fulfillmentDc: 'JHB', customerDc: 'CPT', isIbt: true,
+      promotion: '',
+      tags: ['ibt_cross_region'],
+    });
+  }
+
+  // ── 9. IBT + RETURN — Yoga Mat shipped JHB→CPT, then returned ────────────
+  {
+    const { orderId, orderItemId } = next();
+    orders.push({
+      orderId, orderItemId,
+      offerId: 100007, tsin: 200007, sku: 'KG-YOGA-MAT-6MM',
+      productTitle: 'Yoga Mat Premium 6mm',
+      quantity: 1, sellingPriceCents: 44900, unitPriceCents: 44900,
+      orderDate: daysAgoDate(20, 16),
+      saleStatus: 'Returned',
+      fulfillmentDc: 'CPT', customerDc: 'JHB', isIbt: true,
+      promotion: '',
+      reversalAmountCents: 44900,
+      hasReversal: true,
+      tags: ['return_full', 'ibt_cross_region'],
+    });
+  }
+
+  // ── 10. ACTUAL CSV FEES — Garden Umbrella (fee audit scenario) ────────────
+  // This order has real Takealot-reported fees, slightly different from calculated
+  {
+    const { orderId, orderItemId } = next();
+    const shipDate = daysAgoDate(14, 12);
+    orders.push({
+      orderId, orderItemId,
+      offerId: 100009, tsin: 200009, sku: 'KG-UMBRELLA-3M',
+      productTitle: 'Garden Umbrella 3m',
+      quantity: 1, sellingPriceCents: 249900, unitPriceCents: 249900,
+      orderDate: daysAgoDate(16, 10),
+      saleStatus: 'Delivered',
+      fulfillmentDc: 'JHB', customerDc: 'JHB', isIbt: false,
+      promotion: '',
+      dateShippedToCustomer: shipDate,
+      grossSalesCents: 249900,
+      actualSuccessFeeCents: 3748,   // slightly differs from calculated
+      actualFulfilmentFeeCents: 8900,
+      actualStockTransferFeeCents: 0,
+      netSalesAmountCents: 237252,
+      tags: ['actual_fees_csv'],
+    });
+  }
+
+  // ── 11. ACTUAL CSV FEES DISCREPANCY — Desk Stand (overcharged scenario) ───
+  // Takealot charged more than the calculated fee — triggers fee audit alert
+  {
+    const { orderId, orderItemId } = next();
+    const shipDate = daysAgoDate(9, 11);
+    orders.push({
+      orderId, orderItemId,
+      offerId: 100010, tsin: 200010, sku: 'KG-DESK-STAND-ADJ',
+      productTitle: 'Office Desk Stand Adjustable',
+      quantity: 1, sellingPriceCents: 349900, unitPriceCents: 349900,
+      orderDate: daysAgoDate(11, 9),
+      saleStatus: 'Delivered',
+      fulfillmentDc: 'DBN', customerDc: 'DBN', isIbt: false,
+      promotion: '',
+      dateShippedToCustomer: shipDate,
+      grossSalesCents: 349900,
+      actualSuccessFeeCents: 7874,   // calculated would be ~6998 — overcharged!
+      actualFulfilmentFeeCents: 12500,
+      actualStockTransferFeeCents: 0,
+      netSalesAmountCents: 329526,
+      tags: ['actual_fees_csv'],
+    });
+  }
+
+  // ── 12. OUT-OF-STOCK (historical) — Water Bottle last order before stockout ─
+  {
+    const { orderId, orderItemId } = next();
+    orders.push({
+      orderId, orderItemId,
+      offerId: 100013, tsin: 200013, sku: 'KG-WATER-BOTTLE-SS',
+      productTitle: 'Stainless Steel Water Bottle 750ml',
+      quantity: 2, sellingPriceCents: 49800, unitPriceCents: 24900,
+      orderDate: daysAgoDate(25, 14),
+      saleStatus: 'Delivered',
+      fulfillmentDc: 'JHB', customerDc: 'JHB', isIbt: false,
+      promotion: '',
+      tags: ['multi_unit'],
+    });
+  }
+
+  // ── 13. OUT-OF-STOCK (historical) — Water Bottle — cancelled (no stock) ───
+  {
+    const { orderId, orderItemId } = next();
+    orders.push({
+      orderId, orderItemId,
+      offerId: 100013, tsin: 200013, sku: 'KG-WATER-BOTTLE-SS',
+      productTitle: 'Stainless Steel Water Bottle 750ml',
+      quantity: 1, sellingPriceCents: 24900, unitPriceCents: 24900,
+      orderDate: daysAgoDate(18, 10),
+      saleStatus: 'Cancelled',
+      fulfillmentDc: 'JHB', customerDc: 'JHB', isIbt: false,
+      promotion: '',
+      tags: ['cancelled'],
+    });
+  }
+
+  // ── 14. NEAR-ZERO MARGIN — Notebook, qty 5, shipped ───────────────────────
+  {
+    const { orderId, orderItemId } = next();
+    orders.push({
+      orderId, orderItemId,
+      offerId: 100014, tsin: 200014, sku: 'KG-NOTEBOOK-A5',
+      productTitle: 'Premium Notebook A5 Hardcover',
+      quantity: 5, sellingPriceCents: 39500, unitPriceCents: 7900,
+      orderDate: daysAgoDate(3, 9),
+      saleStatus: 'Shipped',
+      fulfillmentDc: 'JHB', customerDc: 'DBN', isIbt: true,
+      promotion: '',
+      tags: ['multi_unit', 'ibt_cross_region'],
+    });
+  }
+
+  // ── 15. NEAR-ZERO MARGIN — Notebook returned after multi-unit order ────────
+  {
+    const { orderId, orderItemId } = next();
+    orders.push({
+      orderId, orderItemId,
+      offerId: 100014, tsin: 200014, sku: 'KG-NOTEBOOK-A5',
+      productTitle: 'Premium Notebook A5 Hardcover',
+      quantity: 3, sellingPriceCents: 23700, unitPriceCents: 7900,
+      orderDate: daysAgoDate(12, 13),
+      saleStatus: 'Returned',
+      fulfillmentDc: 'JHB', customerDc: 'JHB', isIbt: false,
+      promotion: '',
+      reversalAmountCents: 23700,
+      hasReversal: true,
+      tags: ['return_full', 'multi_unit'],
+    });
+  }
+
+  // ── 16. MULTI-UNIT DAILY DEAL — LED Bulbs (4 units, already a loss-maker) ──
+  {
+    const { orderId, orderItemId } = next();
+    orders.push({
+      orderId, orderItemId,
+      offerId: 100012, tsin: 200012, sku: 'KG-LED-BULB-4PK',
+      productTitle: 'LED Smart Bulb 4-Pack',
+      quantity: 4, sellingPriceCents: 239600, unitPriceCents: 59900,
+      orderDate: daysAgoDate(6, 10),
+      saleStatus: 'Delivered',
+      fulfillmentDc: 'JHB', customerDc: 'JHB', isIbt: false,
+      promotion: 'Daily Deal',
+      tags: ['multi_unit', 'daily_deal'],
+    });
+  }
+
+  // ── 17. RETURN REQUESTED on a loss-maker — Phone Case ─────────────────────
+  {
+    const { orderId, orderItemId } = next();
+    orders.push({
+      orderId, orderItemId,
+      offerId: 100011, tsin: 200011, sku: 'KG-PHONE-CASE-UT',
+      productTitle: 'Phone Case Ultra Thin',
+      quantity: 1, sellingPriceCents: 9900, unitPriceCents: 9900,
+      orderDate: daysAgoDate(1, 16),
+      saleStatus: 'Return Requested',
+      fulfillmentDc: 'CPT', customerDc: 'CPT', isIbt: false,
+      promotion: '',
+      tags: ['return_requested'],
+    });
+  }
+
+  // ── 18. OVERSTOCK + RETURN — Baby Monitor returned after 40+ day hold ──────
+  {
+    const { orderId, orderItemId } = next();
+    orders.push({
+      orderId, orderItemId,
+      offerId: 100008, tsin: 200008, sku: 'KG-BABY-MON-WIFI',
+      productTitle: 'Baby Monitor WiFi',
+      quantity: 1, sellingPriceCents: 199900, unitPriceCents: 199900,
+      orderDate: daysAgoDate(45, 11),
+      saleStatus: 'Returned',
+      fulfillmentDc: 'JHB', customerDc: 'JHB', isIbt: false,
+      promotion: '',
+      reversalAmountCents: 199900,
+      hasReversal: true,
+      tags: ['return_full'],
+    });
+  }
+
+  return orders;
+}
+
+// =============================================================================
+// Random Order Generation (baseline volume)
+// =============================================================================
 
 export function generateDemoOrders(seed: number = 42): DemoOrder[] {
   const rand = createPrng(seed);
@@ -448,28 +885,30 @@ export function generateDemoOrders(seed: number = 42): DemoOrder[] {
   // For each product, generate orders proportional to its weight
   for (const product of DEMO_PRODUCTS) {
     const orderWeight = PRODUCT_ORDER_WEIGHTS[product.offerId] ?? 5;
-    // Scale: 1 weight point ≈ 1-2 orders
+    if (orderWeight === 0) continue; // skip out-of-stock products
+
     const orderCount = Math.max(1, Math.round(orderWeight * (1 + rand() * 0.5)));
 
     for (let i = 0; i < orderCount; i++) {
-      // Date: distributed across last 90 days with recent bias
-      // Use exponential distribution biased toward recent dates
       const daysAgo = Math.floor(Math.pow(rand(), 1.5) * 90);
       const orderDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
-      // Randomize hour
-      orderDate.setHours(Math.floor(rand() * 14) + 7); // 7am - 9pm
+      orderDate.setHours(Math.floor(rand() * 14) + 7);
       orderDate.setMinutes(Math.floor(rand() * 60));
 
       const status = weightedPick(SALE_STATUSES, rand());
       const dc = weightedPick(DC_CONFIGS, rand());
 
-      // Quantity: 80% qty=1, 15% qty=2, 5% qty=3-5
       let quantity = 1;
       const qtyRoll = rand();
-      if (qtyRoll > 0.95) quantity = 3 + Math.floor(rand() * 3); // 3-5
+      if (qtyRoll > 0.95) quantity = 3 + Math.floor(rand() * 3);
       else if (qtyRoll > 0.80) quantity = 2;
 
       const promotionIdx = Math.floor(rand() * PROMOTIONS.length);
+
+      // Attach reversal to randomly generated returns
+      const isReturn = status.status === 'Returned';
+      const reversalAmountCents = isReturn ? product.sellingPriceCents * quantity : undefined;
+      const hasReversal = isReturn ? true : undefined;
 
       orders.push({
         orderId: orderIdCounter++,
@@ -487,6 +926,14 @@ export function generateDemoOrders(seed: number = 42): DemoOrder[] {
         customerDc: dc.customer,
         isIbt: dc.fulfillment !== dc.customer,
         promotion: PROMOTIONS[promotionIdx]!,
+        reversalAmountCents,
+        hasReversal,
+        tags: [
+          isReturn ? 'return_full' : 'normal',
+          ...(quantity > 1 ? ['multi_unit' as EdgeCaseTag] : []),
+          ...(dc.fulfillment !== dc.customer ? ['ibt_cross_region' as EdgeCaseTag] : []),
+          ...(PROMOTIONS[promotionIdx] ? ['daily_deal' as EdgeCaseTag] : []),
+        ],
       });
     }
   }
@@ -584,6 +1031,43 @@ export const DEMO_ALERTS: DemoAlert[] = [
     isRead: true,
     createdDaysAgo: 6,
   },
+  // ── New edge-case alerts ──
+  {
+    alertType: 'return_spike',
+    severity: 'warning',
+    title: 'High return rate: Wireless Earbuds Pro ZA',
+    message: '3 returns in the past 7 days — return rate is 25%. This may indicate a product quality issue or misleading listing. Review your product description.',
+    offerId: 100004,
+    isRead: false,
+    createdDaysAgo: 2,
+  },
+  {
+    alertType: 'loss_maker',
+    severity: 'warning',
+    title: 'Near-loss: Premium Notebook A5',
+    message: 'Profit margin is only 1.8% based on estimated COGS. Enter your actual cost of goods to get an accurate reading. IBT transfers are eroding margin.',
+    offerId: 100014,
+    isRead: false,
+    createdDaysAgo: 1,
+  },
+  {
+    alertType: 'out_of_stock',
+    severity: 'critical',
+    title: 'Out of stock: Stainless Steel Water Bottle',
+    message: 'Zero stock across all DCs. The listing is no longer Buyable. Last sale was 25 days ago. Replenish to resume sales.',
+    offerId: 100013,
+    isRead: false,
+    createdDaysAgo: 3,
+  },
+  {
+    alertType: 'fee_discrepancy',
+    severity: 'warning',
+    title: 'Fee discrepancy: Office Desk Stand Adjustable',
+    message: 'Takealot charged R78.74 success fee — R8.76 more than the calculated R69.98. Import your latest sales report to verify.',
+    offerId: 100010,
+    isRead: false,
+    createdDaysAgo: 1,
+  },
 ];
 
 // =============================================================================
@@ -599,7 +1083,7 @@ export function toTakealotOffer(product: DemoProduct): TakealotOffer {
     title: product.title,
     selling_price: product.sellingPriceCents,
     rrp: product.rrpCents,
-    status: 'Buyable',
+    status: product.stockJhb + product.stockCpt + product.stockDbn > 0 ? 'Buyable' : 'Not Buyable',
     offer_url: `https://www.takealot.com/product/${product.tsin}`,
     product_label_number: `PLN-${product.offerId}`,
     leadtime_days: 0,
@@ -618,10 +1102,10 @@ export function toTakealotOffer(product: DemoProduct): TakealotOffer {
     discount: product.rrpCents > product.sellingPriceCents
       ? Math.round(((product.rrpCents - product.sellingPriceCents) / product.rrpCents) * 100)
       : 0,
-    weight: product.weightGrams / 1000,  // kg
-    length: product.lengthMm / 10,       // cm
-    width: product.widthMm / 10,         // cm
-    height: product.heightMm / 10,       // cm
+    weight: product.weightGrams / 1000,
+    length: product.lengthMm / 10,
+    width: product.widthMm / 10,
+    height: product.heightMm / 10,
     category: product.category,
   };
 }

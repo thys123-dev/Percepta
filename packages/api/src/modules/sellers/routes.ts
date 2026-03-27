@@ -2,13 +2,16 @@ import { randomBytes } from 'crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db, schema } from '../../db/index.js';
-import { eq, and, inArray, desc, asc, sql } from 'drizzle-orm';
+import { eq, and, inArray, desc, asc, sql, gte, lte, notInArray } from 'drizzle-orm';
 import { authenticate } from '../../middleware/auth.js';
 import { TakealotClient } from '../takealot-client/index.js';
 import { encrypt } from '../../config/encryption.js';
 import { initialSyncQueue, calculateProfitsQueue } from '../sync/queues.js';
 import { env } from '../../config/env.js';
 import ExcelJS from 'exceljs';
+import { cacheGet, cacheSet } from '../sync/redis.js';
+
+const CACHE_TTL_SECONDS = 5 * 60; // 5 minutes
 
 const connectApiKeySchema = z.object({
   apiKey: z.string().min(10),
@@ -505,17 +508,19 @@ export async function sellerRoutes(server: FastifyInstance) {
       vatNumber: z.string().max(20).optional(),
       targetMarginPct: z.number().min(0).max(100).optional(),
       onboardingComplete: z.boolean().optional(),
+      monthlyRevenuTargetCents: z.number().int().min(0).optional(),
     });
 
     const updates = profileSchema.parse(request.body);
 
     // Drizzle maps `decimal` columns to `string`, so convert the number from Zod
-    const { targetMarginPct, ...rest } = updates;
+    const { targetMarginPct, monthlyRevenuTargetCents, ...rest } = updates;
     const [updated] = await db
       .update(schema.sellers)
       .set({
         ...rest,
         ...(targetMarginPct !== undefined && { targetMarginPct: targetMarginPct.toString() }),
+        ...(monthlyRevenuTargetCents !== undefined && { monthlyRevenuTargetCents }),
         updatedAt: new Date(),
       })
       .where(eq(schema.sellers.id, sellerId))
@@ -526,5 +531,76 @@ export async function sellerRoutes(server: FastifyInstance) {
       });
 
     return { success: true, profile: updated };
+  });
+
+  // GET /api/sellers/revenue-target — Current month revenue progress vs target
+  server.get('/revenue-target', { preHandler: [authenticate] }, async (request) => {
+    const { sellerId } = request.user as { sellerId: string };
+
+    const cacheKey = `revenue-target:${sellerId}`;
+    const cached = await cacheGet(cacheKey);
+    if (cached) return cached;
+
+    // Fetch seller target
+    const [seller] = await db
+      .select({ monthlyRevenuTargetCents: schema.sellers.monthlyRevenuTargetCents })
+      .from(schema.sellers)
+      .where(eq(schema.sellers.id, sellerId))
+      .limit(1);
+
+    if (!seller || seller.monthlyRevenuTargetCents == null) {
+      return { targetSet: false };
+    }
+
+    // Current calendar month bounds
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    monthStart.setHours(0, 0, 0, 0);
+    const monthEnd = new Date(now);
+    monthEnd.setHours(23, 59, 59, 999);
+
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const currentDay = now.getDate();
+    const daysRemaining = daysInMonth - currentDay;
+
+    // SUM revenue for this calendar month (exclude cancelled/returned)
+    const EXCLUDED = ['Returned', 'Return Requested', 'Cancelled'];
+    const [revenueRow] = await db
+      .select({ total: sql<number>`COALESCE(SUM(${schema.profitCalculations.revenueCents}), 0)::bigint` })
+      .from(schema.profitCalculations)
+      .innerJoin(schema.orders, eq(schema.profitCalculations.orderId, schema.orders.id))
+      .where(
+        and(
+          eq(schema.profitCalculations.sellerId, sellerId),
+          gte(schema.orders.orderDate, monthStart),
+          lte(schema.orders.orderDate, monthEnd),
+          notInArray(schema.orders.saleStatus, EXCLUDED)
+        )
+      );
+
+    const currentRevenueCents = Number(revenueRow?.total ?? 0);
+    const targetCents = seller.monthlyRevenuTargetCents;
+    const percentComplete = targetCents > 0 ? Math.min((currentRevenueCents / targetCents) * 100, 100) : 0;
+    const currentDailyAvgCents = currentDay > 0 ? Math.round(currentRevenueCents / currentDay) : 0;
+    const dailyPaceNeededCents = daysRemaining > 0
+      ? Math.round(Math.max(0, targetCents - currentRevenueCents) / daysRemaining)
+      : 0;
+    const projectedCents = Math.round(currentDailyAvgCents * daysInMonth);
+
+    const result = {
+      targetSet: true,
+      targetCents,
+      currentRevenueCents,
+      percentComplete: Math.round(percentComplete * 10) / 10,
+      daysInMonth,
+      currentDay,
+      daysRemaining,
+      dailyPaceNeededCents,
+      currentDailyAvgCents,
+      projectedCents,
+    };
+
+    await cacheSet(cacheKey, result, CACHE_TTL_SECONDS);
+    return result;
   });
 }

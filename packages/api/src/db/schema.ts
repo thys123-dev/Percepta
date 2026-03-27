@@ -29,6 +29,7 @@ export const sellers = pgTable('sellers', {
   isVatVendor: boolean('is_vat_vendor').default(false),
   vatNumber: varchar('vat_number', { length: 20 }),
   targetMarginPct: decimal('target_margin_pct', { precision: 5, scale: 2 }).default('25.00'),
+  monthlyRevenuTargetCents: integer('monthly_revenue_target_cents'),
   onboardingComplete: boolean('onboarding_complete').default(false),
   initialSyncStatus: varchar('initial_sync_status', { length: 20 }).default('pending'),
 

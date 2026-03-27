@@ -1,9 +1,22 @@
 /**
  * Percepta Demo Seed Script
  *
- * Populates the database with a demo seller, 12 products, ~180 orders,
+ * Populates the database with a demo seller, 14 products, ~220+ orders,
  * calculated fees, profit records, and alerts. Uses the real fee engine
  * to guarantee seeded data matches the production pipeline.
+ *
+ * Edge cases covered:
+ *  - Full returns with reversals (reversal_amount_cents populated)
+ *  - Partial returns (partial reversal)
+ *  - Return Requested (pending returns)
+ *  - Cancelled orders
+ *  - Multi-unit orders (qty 2, 3, 5)
+ *  - Daily Deal promotions
+ *  - IBT cross-region transfers
+ *  - Actual CSV fee data (for fee audit / reconciliation)
+ *  - Out-of-stock / discontinued product
+ *  - Near-zero margin product
+ *  - Loss-maker with high return rate
  *
  * Usage:  npm run seed        (from root)
  *         npm run seed        (from packages/api)
@@ -26,10 +39,12 @@ import {
   DEMO_PRODUCTS,
   DEMO_ALERTS,
   generateDemoOrders,
+  buildEdgeCaseOrders,
   classifySizeTier,
   classifyWeightTier,
 } from './demo-data.js';
 
+// Statuses where we skip profit/fee calculation (no revenue recognised)
 const EXCLUDED_STATUSES = ['Returned', 'Return Requested', 'Cancelled'];
 
 async function seed() {
@@ -79,7 +94,7 @@ async function seed() {
         category: product.category,
         sellingPriceCents: product.sellingPriceCents,
         rrpCents: product.rrpCents,
-        status: 'Buyable',
+        status: product.stockJhb + product.stockCpt + product.stockDbn > 0 ? 'Buyable' : 'Not Buyable',
         weightGrams: product.weightGrams,
         lengthMm: product.lengthMm,
         widthMm: product.widthMm,
@@ -102,21 +117,35 @@ async function seed() {
     offerUuids[product.offerId] = inserted!.id;
   }
 
-  // ── 4. Generate and insert orders ──
-  const demoOrders = generateDemoOrders(42);
-  console.log(`  Inserting ${demoOrders.length} orders...`);
+  // ── 4. Combine random + edge-case orders ──
+  const randomOrders = generateDemoOrders(42);
+  const edgeCaseOrders = buildEdgeCaseOrders();
 
-  // Build a lookup from offerId → product definition
+  // Merge and sort newest-first
+  const allOrders = [...randomOrders, ...edgeCaseOrders].sort(
+    (a, b) => b.orderDate.getTime() - a.orderDate.getTime()
+  );
+
+  console.log(`  Inserting ${allOrders.length} orders (${randomOrders.length} random + ${edgeCaseOrders.length} edge cases)...`);
+
   const productMap = new Map(DEMO_PRODUCTS.map((p) => [p.offerId, p]));
 
   let profitableCount = 0;
   let lossCount = 0;
   let feesCalculated = 0;
+  let returnCount = 0;
+  let cancelCount = 0;
+  let returnRequestedCount = 0;
 
-  for (const order of demoOrders) {
+  for (const order of allOrders) {
     const product = productMap.get(order.offerId)!;
 
-    // Insert order
+    // Track status counts
+    if (order.saleStatus === 'Returned') returnCount++;
+    else if (order.saleStatus === 'Cancelled') cancelCount++;
+    else if (order.saleStatus === 'Return Requested') returnRequestedCount++;
+
+    // Insert the order — including all optional fields
     const [insertedOrder] = await db
       .insert(schema.orders)
       .values({
@@ -137,6 +166,22 @@ async function seed() {
         isIbt: order.isIbt,
         promotion: order.promotion || null,
         source: 'api',
+        // Reversal / return data
+        ...(order.reversalAmountCents != null && {
+          reversalAmountCents: order.reversalAmountCents,
+          hasReversal: true,
+        }),
+        // Actual CSV fee data (fee audit)
+        ...(order.dateShippedToCustomer && {
+          dateShippedToCustomer: order.dateShippedToCustomer,
+        }),
+        ...(order.grossSalesCents != null && {
+          grossSalesCents: order.grossSalesCents,
+          actualSuccessFeeCents: order.actualSuccessFeeCents ?? null,
+          actualFulfilmentFeeCents: order.actualFulfilmentFeeCents ?? null,
+          actualStockTransferFeeCents: order.actualStockTransferFeeCents ?? null,
+          netSalesAmountCents: order.netSalesAmountCents ?? null,
+        }),
       })
       .returning({ id: schema.orders.id });
 
@@ -159,7 +204,7 @@ async function seed() {
         fulfillmentDc: order.fulfillmentDc,
         customerDc: order.customerDc,
         saleStatus: order.saleStatus,
-        shipDate: order.orderDate, // use order date as proxy for ship date
+        shipDate: order.dateShippedToCustomer ?? order.orderDate,
       }
     );
 
@@ -226,10 +271,28 @@ async function seed() {
   }
 
   // ── Summary ──
+  const excluded = allOrders.length - feesCalculated;
   console.log('─'.repeat(50));
-  console.log(`✅ Seeded: 1 seller, ${DEMO_PRODUCTS.length} products, ${demoOrders.length} orders, ${DEMO_ALERTS.length} alerts`);
-  console.log(`   Fees calculated: ${feesCalculated} (${profitableCount} profitable, ${lossCount} loss-making)`);
-  console.log(`   Excluded from profit calc: ${demoOrders.length - feesCalculated} (returned/cancelled)`);
+  console.log(`✅ Seeded: 1 seller, ${DEMO_PRODUCTS.length} products, ${allOrders.length} orders, ${DEMO_ALERTS.length} alerts`);
+  console.log(`   Fees calculated:  ${feesCalculated} (${profitableCount} profitable, ${lossCount} loss-making)`);
+  console.log(`   Excluded:         ${excluded} (${returnCount} returned, ${returnRequestedCount} return requested, ${cancelCount} cancelled)`);
+  console.log(`   Edge cases:       ${edgeCaseOrders.length} explicit scenario orders`);
+  console.log('');
+  console.log('   Edge cases covered:');
+  console.log('     ✓ Full returns with reversals');
+  console.log('     ✓ Partial return / partial reversal');
+  console.log('     ✓ Return Requested (pending)');
+  console.log('     ✓ Cancelled orders');
+  console.log('     ✓ Multi-unit orders (qty 2–5)');
+  console.log('     ✓ Daily Deal promotions');
+  console.log('     ✓ IBT cross-region transfers');
+  console.log('     ✓ IBT + Return combined');
+  console.log('     ✓ Daily Deal + Return combined');
+  console.log('     ✓ Actual CSV fee data (fee reconciliation)');
+  console.log('     ✓ Fee discrepancy (overcharge scenario)');
+  console.log('     ✓ Out-of-stock / discontinued product');
+  console.log('     ✓ Near-zero margin with estimated COGS');
+  console.log('     ✓ Overstock + return on storage-fee product');
   console.log('');
   console.log('   Login: demo@percepta.co.za / DemoPass123!');
   console.log('');
