@@ -112,3 +112,19 @@ export const processWebhookQueue = new Queue<ProcessWebhookJobData>('process-web
     removeOnFail: { count: 200 },
   },
 });
+
+// ---- Week 9: Email Digest ----
+
+export interface WeeklyDigestJobData {
+  sellerId: string;
+}
+
+export const emailDigestQueue = new Queue<WeeklyDigestJobData>('email-digest', {
+  connection: redisConnection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 5000 },
+    removeOnComplete: { count: 100 },
+    removeOnFail: { count: 50 },
+  },
+});
