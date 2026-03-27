@@ -26,6 +26,12 @@ export async function processDailySync(
 ): Promise<{ offersCount: number; ordersCount: number }> {
   const { sellerId } = job.data;
 
+  if (sellerId === '__all__') {
+    const { dispatchDailySyncForAllSellers } = await import('../workers.js');
+    await dispatchDailySyncForAllSellers();
+    return { offersCount: 0, ordersCount: 0 };
+  }
+
   // Verify seller is in a complete state before running daily sync
   const [seller] = await db
     .select({ initialSyncStatus: schema.sellers.initialSyncStatus })

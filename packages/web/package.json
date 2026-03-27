@@ -11,16 +11,19 @@
   },
   "dependencies": {
     "@percepta/shared": "*",
+    "@sentry/react": "^10.45.0",
+    "@tanstack/react-query": "^5.62.0",
+    "@tanstack/react-table": "^8.20.0",
+    "axios": "^1.7.0",
+    "clsx": "^2.1.0",
+    "lucide-react": "^0.468.0",
+    "posthog-js": "^1.363.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.1.0",
-    "@tanstack/react-query": "^5.62.0",
-    "@tanstack/react-table": "^8.20.0",
     "recharts": "^2.15.0",
     "socket.io-client": "^4.8.0",
-    "axios": "^1.7.0",
-    "clsx": "^2.1.0",
-    "lucide-react": "^0.468.0"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

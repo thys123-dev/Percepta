@@ -25,6 +25,10 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default('alerts@percepta.co.za'),
 
+  SENTRY_DSN: z.string().optional(),
+
+  DEMO_MODE: z.coerce.boolean().default(false),
+
   FRONTEND_URL: z.string().default('http://localhost:5173'),
 });
 

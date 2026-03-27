@@ -14,6 +14,12 @@
 
 import { env } from '../../config/env.js';
 import { OFFERS_PER_PAGE, MAX_SALES_DATE_RANGE_DAYS } from '@percepta/shared';
+import {
+  type CircuitBreakerPolicy,
+  ConsecutiveBreaker,
+  handleAll,
+  circuitBreaker,
+} from 'cockatiel';
 
 // ---- Types ----
 
@@ -99,10 +105,28 @@ export class TakealotClient {
 
   private static readonly MAX_RETRIES = 3;
   private static readonly BASE_BACKOFF_MS = 1000;
+  private static readonly REQUEST_TIMEOUT_MS = 30_000;
+
+  private circuitBreaker: CircuitBreakerPolicy;
 
   constructor(apiKey: string, baseUrl?: string) {
     this.apiKey = apiKey;
     this.baseUrl = baseUrl ?? env.TAKEALOT_API_BASE_URL;
+
+    // Circuit breaker: open after 5 consecutive failures, half-open after 30s
+    this.circuitBreaker = circuitBreaker(handleAll, {
+      halfOpenAfter: 30_000,
+      breaker: new ConsecutiveBreaker(5),
+    });
+    this.circuitBreaker.onBreak(() => {
+      console.warn('[TakealotClient] Circuit breaker OPEN — pausing requests for 30s');
+    });
+    this.circuitBreaker.onHalfOpen(() => {
+      console.info('[TakealotClient] Circuit breaker HALF-OPEN — testing next request');
+    });
+    this.circuitBreaker.onReset(() => {
+      console.info('[TakealotClient] Circuit breaker CLOSED — requests resuming normally');
+    });
   }
 
   // ---- Core HTTP ----
@@ -141,9 +165,13 @@ export class TakealotClient {
       Accept: 'application/json',
     };
 
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), TakealotClient.REQUEST_TIMEOUT_MS);
+
     const fetchOptions: RequestInit = {
       method,
       headers,
+      signal: abortController.signal,
     };
 
     if (options?.body && (method === 'POST' || method === 'PATCH')) {
@@ -151,7 +179,8 @@ export class TakealotClient {
     }
 
     try {
-      const response = await fetch(url.toString(), fetchOptions);
+      const response = await this.circuitBreaker.execute(() => fetch(url.toString(), fetchOptions));
+      clearTimeout(timeoutId);
 
       // Update rate limit tracking from response headers
       this.updateRateLimit(response.headers);
@@ -193,6 +222,7 @@ export class TakealotClient {
 
       return (await response.json()) as T;
     } catch (error) {
+      clearTimeout(timeoutId);
       if (error instanceof TakealotApiError) throw error;
 
       // Network errors — retry with backoff

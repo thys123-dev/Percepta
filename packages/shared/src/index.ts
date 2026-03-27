@@ -301,3 +301,53 @@ export const STOCK_COVER_WARNING_DAYS = 35;
 export const DEFAULT_COGS_ESTIMATE_PCT = 0.50;
 export const MAX_SALES_DATE_RANGE_DAYS = 180;
 export const OFFERS_PER_PAGE = 100;
+
+// ---- Account Transaction Types ----
+
+export type AccountTransactionType =
+  | 'Customer Order Payment'
+  | 'Success Fee Charge'
+  | 'Fulfilment Fee Charge'
+  | 'Stock Transfer Fee Charge'
+  | 'Storage Fee Charge'
+  | 'Customer Order Reversal'
+  | 'Success Fee Reversal'
+  | 'Fulfilment Fee Reversal'
+  | 'Order Cancellation Penalty'
+  | 'Stock Loss Fulfilment Fee'
+  | 'Stock Loss Success Fee'
+  | 'Stock Loss Payment'
+  | 'Returns Removal Order Fee'
+  | 'Takealot Removal Order Fee'
+  | 'Subscription Fee Charge'
+  | 'Ad Credit Purchase'
+  | 'Disbursement';
+
+export type SellerCostType =
+  | 'storage'
+  | 'subscription'
+  | 'ad_spend'
+  | 'removal'
+  | 'stock_loss'
+  | 'cancellation_penalty';
+
+export interface AccountTransactionPreview {
+  mode: 'preview';
+  parsed: { totalRows: number; parseErrors: number };
+  byType: Record<string, { count: number; totalInclVatCents: number }>;
+  orderLinked: { count: number; matchedToOrders: number; unmatchedOrders: number };
+  nonOrder: { count: number; totalInclVatCents: number };
+  disbursements: { count: number; totalInclVatCents: number };
+  duplicateCount: number;
+  parseErrors: Array<{ line: number; message: string }>;
+  dateRange: { earliest: string; latest: string } | null;
+}
+
+export interface AccountTransactionCommitResult {
+  mode: 'commit';
+  importId: string;
+  inserted: number;
+  duplicatesSkipped: number;
+  ordersUpdated: number;
+  message: string;
+}
