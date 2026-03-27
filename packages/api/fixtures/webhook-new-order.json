@@ -1,0 +1,21 @@
+{
+  "event_type": "New Leadtime Order",
+  "delivery_id": "demo-webhook-001",
+  "data": {
+    "order_item_id": 999001,
+    "order_id": 599001,
+    "offer_id": 100001,
+    "tsin": 200001,
+    "sku": "KG-BRAAI-TONG-01",
+    "product_title": "Braai Master Tongs Set",
+    "quantity": 1,
+    "selling_price": 349.00,
+    "unit_price": 349.00,
+    "dc": "JHB",
+    "customer_dc": "JHB",
+    "status": "Accepted",
+    "sale_type": "Leadtime",
+    "order_date": "2026-03-24T10:30:00Z",
+    "promotion": ""
+  }
+}

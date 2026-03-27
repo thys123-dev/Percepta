@@ -9,10 +9,12 @@
  */
 
 import { Worker } from 'bullmq';
+import type { ConnectionOptions } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
-import { redisConnection } from './redis.js';
+import { redisConnection, progressPublisher, cacheInvalidate } from './redis.js';
 import { publishProfitUpdate } from './redis.js';
+import { pool } from '../../db/index.js';
 import {
   initialSyncQueue,
   syncOffersQueue,
@@ -28,7 +30,7 @@ import { processSyncSales } from './jobs/sync-sales.js';
 import { processDailySync } from './jobs/daily-sync.js';
 import { processCalculateProfits } from '../fees/profit-processor.js';
 import { processWebhook } from '../webhooks/processor.js';
-import { checkStorageWarnings } from '../alerts/alert-generator.js';
+import { checkStorageWarnings, checkLowStockAlerts } from '../alerts/alert-generator.js';
 import { processSendWeeklyDigest } from '../email/jobs/send-weekly-digest.js';
 
 const CONCURRENCY = 2; // Be gentle on Takealot API
@@ -39,7 +41,7 @@ export function startWorkers() {
     'initial-sync',
     processInitialSync,
     {
-      connection: redisConnection.duplicate(),
+      connection: redisConnection.duplicate() as unknown as ConnectionOptions,
       concurrency: CONCURRENCY,
     }
   );
@@ -59,7 +61,7 @@ export function startWorkers() {
     'sync-offers',
     processSyncOffers,
     {
-      connection: redisConnection.duplicate(),
+      connection: redisConnection.duplicate() as unknown as ConnectionOptions,
       concurrency: CONCURRENCY,
     }
   );
@@ -77,7 +79,7 @@ export function startWorkers() {
     'sync-sales',
     processSyncSales,
     {
-      connection: redisConnection.duplicate(),
+      connection: redisConnection.duplicate() as unknown as ConnectionOptions,
       concurrency: CONCURRENCY,
     }
   );
@@ -95,7 +97,7 @@ export function startWorkers() {
     'calculate-profits',
     processCalculateProfits,
     {
-      connection: redisConnection.duplicate(),
+      connection: redisConnection.duplicate() as unknown as ConnectionOptions,
       concurrency: 5,
     }
   );
@@ -122,6 +124,11 @@ export function startWorkers() {
     }).catch((err: Error) => {
       console.error(`[calculate-profits] Failed to publish profit update: ${err.message}`);
     });
+
+    // Invalidate cached dashboard data so next request reflects updated profits
+    cacheInvalidate(`dashboard:${job.data.sellerId}:*`).catch((err: Error) => {
+      console.error(`[calculate-profits] Failed to invalidate dashboard cache: ${err.message}`);
+    });
   });
 
   calculateProfitsWorker.on('failed', (job, err) => {
@@ -133,7 +140,7 @@ export function startWorkers() {
     'daily-sync',
     processDailySync,
     {
-      connection: redisConnection.duplicate(),
+      connection: redisConnection.duplicate() as unknown as ConnectionOptions,
       concurrency: 3,
     }
   );
@@ -154,6 +161,16 @@ export function startWorkers() {
         .catch((err: Error) => {
           console.error(`[daily-sync] Storage warning check failed: ${err.message}`);
         });
+
+      checkLowStockAlerts(job.data.sellerId)
+        .then((count) => {
+          if (count > 0) {
+            console.info(`[daily-sync] Created ${count} low-stock alerts for seller ${job.data.sellerId}`);
+          }
+        })
+        .catch((err: Error) => {
+          console.error(`[daily-sync] Low-stock alert check failed: ${err.message}`);
+        });
     }
   });
 
@@ -167,7 +184,7 @@ export function startWorkers() {
     'process-webhook',
     processWebhook,
     {
-      connection: redisConnection.duplicate(),
+      connection: redisConnection.duplicate() as unknown as ConnectionOptions,
       concurrency: 10,
     }
   );
@@ -189,7 +206,7 @@ export function startWorkers() {
     'email-digest',
     processSendWeeklyDigest,
     {
-      connection: redisConnection.duplicate(),
+      connection: redisConnection.duplicate() as unknown as ConnectionOptions,
       concurrency: 5,
     }
   );
@@ -215,6 +232,8 @@ export function startWorkers() {
   // Graceful shutdown
   async function shutdown() {
     console.info('[Workers] Shutting down gracefully...');
+
+    // 1. Close all BullMQ workers (drains active jobs)
     await Promise.all([
       initialSyncWorker.close(),
       syncOffersWorker.close(),
@@ -225,6 +244,17 @@ export function startWorkers() {
       emailDigestWorker.close(),
     ]);
     console.info('[Workers] All workers shut down');
+
+    // 2. Close Redis connections
+    await Promise.all([
+      redisConnection.quit(),
+      progressPublisher.quit(),
+    ]);
+    console.info('[Workers] Redis connections closed');
+
+    // 3. Close database pool
+    await pool.end();
+    console.info('[Workers] Database pool closed');
   }
 
   process.on('SIGTERM', () => { void shutdown(); });

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import bcrypt from 'bcrypt';
 import { db, schema } from '../../db/index.js';
 import { eq } from 'drizzle-orm';
+import { authenticate } from '../../middleware/auth.js';
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -17,7 +18,7 @@ const loginSchema = z.object({
 
 export async function authRoutes(server: FastifyInstance) {
   // POST /api/auth/register
-  server.post('/register', async (request, reply) => {
+  server.post('/register', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = registerSchema.parse(request.body);
 
     // Check if email already exists
@@ -68,7 +69,7 @@ export async function authRoutes(server: FastifyInstance) {
   });
 
   // POST /api/auth/login
-  server.post('/login', async (request, reply) => {
+  server.post('/login', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = loginSchema.parse(request.body);
 
     const [seller] = await db
@@ -136,5 +137,43 @@ export async function authRoutes(server: FastifyInstance) {
     } catch {
       return reply.status(401).send({ message: 'Invalid or expired refresh token' });
     }
+  });
+
+  // DELETE /api/auth/account — POPIA right to erasure
+  // Deletes the seller and all associated data (cascades via FK constraints).
+  server.delete('/account', { preHandler: [authenticate] }, async (request, reply) => {
+    const { sellerId } = request.user as { sellerId: string };
+
+    await db.delete(schema.sellers).where(eq(schema.sellers.id, sellerId));
+
+    return reply.status(200).send({ success: true, message: 'Account and all associated data deleted.' });
+  });
+
+  // GET /api/auth/export — POPIA right of access
+  // Returns all data held for the authenticated seller.
+  server.get('/export', { preHandler: [authenticate] }, async (request) => {
+    const { sellerId } = request.user as { sellerId: string };
+
+    const [seller, offers, orders, profitCalcs, alerts] = await Promise.all([
+      db.select().from(schema.sellers).where(eq(schema.sellers.id, sellerId)),
+      db.select().from(schema.offers).where(eq(schema.offers.sellerId, sellerId)),
+      db.select().from(schema.orders).where(eq(schema.orders.sellerId, sellerId)),
+      db.select().from(schema.profitCalculations).where(eq(schema.profitCalculations.sellerId, sellerId)),
+      db.select().from(schema.alerts).where(eq(schema.alerts.sellerId, sellerId)),
+    ]);
+
+    // Redact sensitive fields
+    const sellerData = seller[0]
+      ? { ...seller[0], passwordHash: '[redacted]', apiKeyEnc: '[redacted]', webhookSecret: '[redacted]' }
+      : null;
+
+    return {
+      exportedAt: new Date().toISOString(),
+      seller: sellerData,
+      offers,
+      orders,
+      profitCalculations: profitCalcs,
+      alerts,
+    };
   });
 }

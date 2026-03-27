@@ -35,6 +35,43 @@ progressPublisher.on('error', (err) => {
   console.error('[Redis Publisher] Connection error:', err.message);
 });
 
+// ---- Cache Helpers ----
+
+/**
+ * Read a cached value. Returns null on miss or parse error.
+ */
+export async function cacheGet<T>(key: string): Promise<T | null> {
+  try {
+    const raw = await progressPublisher.get(key);
+    if (raw === null) return null;
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Write a value to cache with a TTL in seconds.
+ */
+export async function cacheSet(key: string, value: unknown, ttlSeconds: number): Promise<void> {
+  await progressPublisher.setex(key, ttlSeconds, JSON.stringify(value));
+}
+
+/**
+ * Invalidate all keys matching a pattern (uses SCAN to avoid blocking).
+ * Example: cacheInvalidate('dashboard:seller-id:*')
+ */
+export async function cacheInvalidate(pattern: string): Promise<void> {
+  let cursor = '0';
+  do {
+    const [nextCursor, keys] = await progressPublisher.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+    cursor = nextCursor;
+    if (keys.length > 0) {
+      await progressPublisher.del(...keys);
+    }
+  } while (cursor !== '0');
+}
+
 // ---- Progress Event Helpers ----
 
 export interface SyncProgressEvent {

@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   TrendingDown,
   Package,
+  PackageMinus,
   CheckCircle2,
   CheckCheck,
   ChevronLeft,
@@ -36,6 +37,7 @@ const TABS: { value: AlertType | 'all'; label: string; icon: React.ReactNode }[]
   { value: 'loss_maker', label: 'Loss-Makers', icon: <AlertTriangle className="h-3.5 w-3.5" /> },
   { value: 'margin_drop', label: 'Margin Drops', icon: <TrendingDown className="h-3.5 w-3.5" /> },
   { value: 'storage_warning', label: 'Storage', icon: <Package className="h-3.5 w-3.5" /> },
+  { value: 'low_stock', label: 'Low Stock', icon: <PackageMinus className="h-3.5 w-3.5" /> },
 ];
 
 // Severity config
@@ -65,6 +67,8 @@ function AlertIcon({ type }: { type: string }) {
       return <TrendingDown className="h-5 w-5" />;
     case 'storage_warning':
       return <Package className="h-5 w-5" />;
+    case 'low_stock':
+      return <PackageMinus className="h-5 w-5" />;
     default:
       return <AlertTriangle className="h-5 w-5" />;
   }

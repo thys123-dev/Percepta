@@ -14,7 +14,13 @@
  */
 
 import { Queue } from 'bullmq';
+import type { ConnectionOptions } from 'bullmq';
 import { redisConnection } from './redis.js';
+
+// BullMQ 5.x bundles its own ioredis version which differs from the root
+// ioredis install, causing a structural type mismatch. The runtime connection
+// object is identical — the cast is safe and keeps both packages independent.
+const conn = redisConnection as unknown as ConnectionOptions;
 
 // ---- Job Data Types ----
 
@@ -52,8 +58,8 @@ export interface ProcessWebhookJobData {
 
 // ---- Queue Instances ----
 
-export const initialSyncQueue = new Queue<InitialSyncJobData>('initial-sync', {
-  connection: redisConnection,
+export const initialSyncQueue = new Queue<InitialSyncJobData, any, string>('initial-sync', {
+  connection: conn,
   defaultJobOptions: {
     attempts: 3,
     backoff: { type: 'exponential', delay: 5000 },
@@ -62,8 +68,8 @@ export const initialSyncQueue = new Queue<InitialSyncJobData>('initial-sync', {
   },
 });
 
-export const syncOffersQueue = new Queue<SyncOffersJobData>('sync-offers', {
-  connection: redisConnection,
+export const syncOffersQueue = new Queue<SyncOffersJobData, any, string>('sync-offers', {
+  connection: conn,
   defaultJobOptions: {
     attempts: 3,
     backoff: { type: 'exponential', delay: 3000 },
@@ -72,8 +78,8 @@ export const syncOffersQueue = new Queue<SyncOffersJobData>('sync-offers', {
   },
 });
 
-export const syncSalesQueue = new Queue<SyncSalesJobData>('sync-sales', {
-  connection: redisConnection,
+export const syncSalesQueue = new Queue<SyncSalesJobData, any, string>('sync-sales', {
+  connection: conn,
   defaultJobOptions: {
     attempts: 3,
     backoff: { type: 'exponential', delay: 3000 },
@@ -82,8 +88,8 @@ export const syncSalesQueue = new Queue<SyncSalesJobData>('sync-sales', {
   },
 });
 
-export const calculateProfitsQueue = new Queue<CalculateProfitsJobData>('calculate-profits', {
-  connection: redisConnection,
+export const calculateProfitsQueue = new Queue<CalculateProfitsJobData, any, string>('calculate-profits', {
+  connection: conn,
   defaultJobOptions: {
     attempts: 3,
     backoff: { type: 'exponential', delay: 2000 },
@@ -92,8 +98,8 @@ export const calculateProfitsQueue = new Queue<CalculateProfitsJobData>('calcula
   },
 });
 
-export const dailySyncQueue = new Queue<DailySyncJobData>('daily-sync', {
-  connection: redisConnection,
+export const dailySyncQueue = new Queue<DailySyncJobData, any, string>('daily-sync', {
+  connection: conn,
   defaultJobOptions: {
     attempts: 2,
     backoff: { type: 'exponential', delay: 10000 },
@@ -103,8 +109,8 @@ export const dailySyncQueue = new Queue<DailySyncJobData>('daily-sync', {
 });
 
 // Webhook event processing queue — high priority, low latency
-export const processWebhookQueue = new Queue<ProcessWebhookJobData>('process-webhook', {
-  connection: redisConnection,
+export const processWebhookQueue = new Queue<ProcessWebhookJobData, any, string>('process-webhook', {
+  connection: conn,
   defaultJobOptions: {
     attempts: 3,
     backoff: { type: 'exponential', delay: 1000 },
@@ -119,8 +125,8 @@ export interface WeeklyDigestJobData {
   sellerId: string;
 }
 
-export const emailDigestQueue = new Queue<WeeklyDigestJobData>('email-digest', {
-  connection: redisConnection,
+export const emailDigestQueue = new Queue<WeeklyDigestJobData, any, string>('email-digest', {
+  connection: conn,
   defaultJobOptions: {
     attempts: 3,
     backoff: { type: 'exponential', delay: 5000 },

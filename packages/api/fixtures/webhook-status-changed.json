@@ -1,0 +1,10 @@
+{
+  "event_type": "Sale Status Changed",
+  "delivery_id": "demo-webhook-002",
+  "data": {
+    "order_item_id": 900000,
+    "order_id": 500000,
+    "status": "Delivered",
+    "status_changed_at": "2026-03-24T14:00:00Z"
+  }
+}

@@ -15,7 +15,7 @@ import api from '../services/api.js';
 // Types
 // =============================================================================
 
-export type AlertType = 'loss_maker' | 'margin_drop' | 'storage_warning' | 'ibt_risk';
+export type AlertType = 'loss_maker' | 'margin_drop' | 'storage_warning' | 'ibt_risk' | 'low_stock';
 export type AlertSeverity = 'info' | 'warning' | 'critical';
 
 export interface AlertRow {

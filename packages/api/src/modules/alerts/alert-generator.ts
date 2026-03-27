@@ -13,7 +13,7 @@
  * can push a live notification to the seller's dashboard.
  */
 
-import { and, eq, gte, sql } from 'drizzle-orm';
+import { and, eq, gte, gt, sql } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
 import { publishAlert } from '../sync/redis.js';
 import { sendEmail } from '../email/email-service.js';
@@ -313,6 +313,62 @@ export async function checkFeeDiscrepancyAlert(params: {
 // =============================================================================
 // Storage Warning Alert (batch — called by daily sync)
 // =============================================================================
+
+// =============================================================================
+// Low-Stock Alert (batch — called by daily sync)
+// =============================================================================
+
+/**
+ * Scans all offers for a seller where stock cover is dangerously low
+ * (< 7 days) and the product is actively selling (salesUnits30d > 0).
+ * Returns the number of alerts created.
+ */
+export async function checkLowStockAlerts(sellerId: string): Promise<number> {
+  const LOW_STOCK_THRESHOLD_DAYS = 7;
+
+  const offers = await db
+    .select({
+      offerId: schema.offers.offerId,
+      title: schema.offers.title,
+      stockCoverDays: schema.offers.stockCoverDays,
+      salesUnits30d: schema.offers.salesUnits30d,
+      stockJhb: schema.offers.stockJhb,
+      stockCpt: schema.offers.stockCpt,
+      stockDbn: schema.offers.stockDbn,
+    })
+    .from(schema.offers)
+    .where(
+      and(
+        eq(schema.offers.sellerId, sellerId),
+        gt(schema.offers.salesUnits30d, 0),
+        sql`(COALESCE(${schema.offers.stockJhb}, 0) + COALESCE(${schema.offers.stockCpt}, 0) + COALESCE(${schema.offers.stockDbn}, 0)) > 0`,
+        sql`(${schema.offers.stockCoverDays} < ${LOW_STOCK_THRESHOLD_DAYS} OR ${schema.offers.stockCoverDays} IS NULL)`
+      )
+    );
+
+  let created = 0;
+
+  for (const offer of offers) {
+    const days = offer.stockCoverDays ?? 0;
+    const severity = days <= 2 ? 'critical' : 'warning';
+    const title = offer.title ?? 'Unknown Product';
+    const velocity = Math.round(((offer.salesUnits30d ?? 0) / 30) * 10) / 10;
+
+    const id = await insertAlert({
+      sellerId,
+      alertType: 'low_stock',
+      severity,
+      title: `Low Stock: ${title}`,
+      message: `${title} has ${days} days of stock cover at ${velocity} units/day. Consider replenishing soon.`,
+      offerId: offer.offerId,
+      actionUrl: '/dashboard/inventory',
+    });
+
+    if (id) created++;
+  }
+
+  return created;
+}
 
 export async function checkStorageWarnings(sellerId: string): Promise<number> {
   const ADVANCE_WARNING_DAYS = 32;

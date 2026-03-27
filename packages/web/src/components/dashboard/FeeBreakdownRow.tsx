@@ -85,6 +85,9 @@ export function FeeBreakdownRow({ offerId, colSpan }: FeeBreakdownRowProps) {
     ...(fee.storageFeeAllocatedCents > 0
       ? [{ label: 'Storage Fee', cents: fee.storageFeeAllocatedCents, isDeduction: true }]
       : []),
+    ...(fee.vatOnFeesCents > 0
+      ? [{ label: 'VAT on Fees', cents: fee.vatOnFeesCents, isDeduction: true }]
+      : []),
     { label: 'COGS', cents: fee.cogsCents, isDeduction: true },
     ...(fee.inboundCostCents > 0
       ? [{ label: 'Inbound Cost', cents: fee.inboundCostCents, isDeduction: true }]
@@ -156,6 +159,12 @@ export function FeeBreakdownRow({ offerId, colSpan }: FeeBreakdownRowProps) {
               {formatPct(fee.marginPct)}
             </strong>
           </span>
+
+          {fee.quantity > 1 && (
+            <span className="rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-600">
+              Per unit · order qty: {fee.quantity}
+            </span>
+          )}
 
           {fee.cogsIsEstimated && (
             <span className="flex items-center gap-1 text-yellow-600">

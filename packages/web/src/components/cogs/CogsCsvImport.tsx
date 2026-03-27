@@ -1,14 +1,15 @@
 /**
  * CogsCsvImport
  *
- * Upload a CSV file (or download the template), parse it client-side,
+ * Upload a CSV or Excel (.xlsx) file, parse it client-side,
  * preview which rows will be matched, then commit the import.
  *
- * Expected CSV columns (order-independent, headers required):
+ * Expected columns (order-independent, headers required):
  *   offer_id | cogs_rands | inbound_cost_rands
  */
 
 import { useRef, useState } from 'react';
+import * as XLSX from 'xlsx';
 import {
   Upload,
   Download,
@@ -17,6 +18,7 @@ import {
   AlertTriangle,
   Loader2,
   FileText,
+  FileSpreadsheet,
   ChevronRight,
 } from 'lucide-react';
 import { useCsvImport, type CsvPreviewItem } from '../../hooks/useCogsImport.js';
@@ -24,7 +26,7 @@ import { apiClient } from '../../services/api.js';
 import { formatCurrency } from '../../utils/format.js';
 
 // =============================================================================
-// CSV parser (client-side, no external dependency)
+// Parsers (CSV and xlsx — both produce the same ParsedRow[])
 // =============================================================================
 
 interface ParsedRow {
@@ -38,54 +40,61 @@ interface ParseError {
   message: string;
 }
 
-function parseCsv(text: string): { rows: ParsedRow[]; errors: ParseError[] } {
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length < 2) return { rows: [], errors: [{ row: 0, message: 'File is empty or missing headers.' }] };
+/** Normalise a header string for column matching. */
+const normaliseHeader = (h: unknown) =>
+  String(h ?? '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
 
-  // Parse header row — find required column indices
-  const rawHeader = lines[0];
-  // Handle quoted fields in header
-  const headers = rawHeader.split(',').map((h) => h.trim().replace(/^"|"$/g, '').toLowerCase());
+/** Convert a raw cell value to a float, returning NaN if not parseable. */
+const toFloat = (v: unknown): number => {
+  if (v == null || v === '') return NaN;
+  if (typeof v === 'number') return v;
+  return parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
+};
 
+/**
+ * Parse rows from a normalised 2-D array (header row + data rows).
+ * Works for both CSV and xlsx — the caller supplies the raw 2-D array.
+ */
+function parseRows(
+  rawRows: unknown[][],
+): { rows: ParsedRow[]; errors: ParseError[] } {
+  if (rawRows.length < 2) {
+    return { rows: [], errors: [{ row: 0, message: 'File is empty or missing headers.' }] };
+  }
+
+  const headers = (rawRows[0] as unknown[]).map(normaliseHeader);
   const offerIdIdx = headers.findIndex((h) => h === 'offer_id');
-  const cogsIdx = headers.findIndex((h) => h === 'cogs_rands');
+  const cogsIdx    = headers.findIndex((h) => h === 'cogs_rands');
   const inboundIdx = headers.findIndex((h) => h === 'inbound_cost_rands');
 
   if (offerIdIdx === -1 || cogsIdx === -1) {
     return {
       rows: [],
-      errors: [
-        {
-          row: 0,
-          message: 'Missing required columns: offer_id, cogs_rands. Please use the template.',
-        },
-      ],
+      errors: [{
+        row: 0,
+        message: 'Missing required columns: offer_id, cogs_rands. Please use the template.',
+      }],
     };
   }
 
   const rows: ParsedRow[] = [];
   const errors: ParseError[] = [];
 
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
+  for (let i = 1; i < rawRows.length; i++) {
+    const cells = rawRows[i] as unknown[];
+    const rawOfferId = cells[offerIdIdx];
+    const rawCogs    = cells[cogsIdx];
+    const rawInbound = inboundIdx !== -1 ? cells[inboundIdx] : 0;
 
-    // Simple CSV split — handles quoted fields with commas
-    const cells = splitCsvLine(line);
-
-    const rawOfferId = cells[offerIdIdx]?.trim();
-    const rawCogs = cells[cogsIdx]?.trim();
-    const rawInbound = inboundIdx !== -1 ? cells[inboundIdx]?.trim() : '0';
-
-    const offerId = parseInt(rawOfferId ?? '', 10);
-    const cogsRands = parseFloat(rawCogs ?? '');
-    const inboundRands = parseFloat(rawInbound || '0');
+    const offerId     = parseInt(String(rawOfferId ?? ''), 10);
+    const cogsRands   = toFloat(rawCogs);
+    const inboundRands = toFloat(rawInbound);
 
     if (isNaN(offerId)) {
       errors.push({ row: i + 1, message: `Row ${i + 1}: invalid offer_id "${rawOfferId}"` });
       continue;
     }
-    if (rawCogs === '' || rawCogs == null) continue; // Skip blank COGS rows silently
+    if (rawCogs == null || rawCogs === '') continue; // blank COGS rows skipped silently
     if (isNaN(cogsRands) || cogsRands < 0) {
       errors.push({ row: i + 1, message: `Row ${i + 1}: invalid cogs_rands "${rawCogs}"` });
       continue;
@@ -93,7 +102,7 @@ function parseCsv(text: string): { rows: ParsedRow[]; errors: ParseError[] } {
 
     rows.push({
       offerId,
-      cogsCents: Math.round(cogsRands * 100),
+      cogsCents:        Math.round(cogsRands * 100),
       inboundCostCents: isNaN(inboundRands) ? 0 : Math.round(inboundRands * 100),
     });
   }
@@ -101,30 +110,37 @@ function parseCsv(text: string): { rows: ParsedRow[]; errors: ParseError[] } {
   return { rows, errors };
 }
 
+/** Parse a CSV text string into a 2-D raw array. */
+function csvTo2D(text: string): unknown[][] {
+  const lines = text.trim().split(/\r?\n/);
+  return lines.map((line) => splitCsvLine(line));
+}
+
 /** Splits a single CSV line, respecting double-quoted fields. */
 function splitCsvLine(line: string): string[] {
   const result: string[] = [];
   let inQuotes = false;
   let current = '';
-
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
     if (ch === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
+      if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+      else inQuotes = !inQuotes;
     } else if (ch === ',' && !inQuotes) {
-      result.push(current);
-      current = '';
+      result.push(current); current = '';
     } else {
       current += ch;
     }
   }
   result.push(current);
   return result;
+}
+
+/** Parse an xlsx ArrayBuffer into a 2-D raw array (first sheet). */
+function xlsxTo2D(buffer: ArrayBuffer): unknown[][] {
+  const wb = XLSX.read(buffer, { type: 'array', cellDates: false });
+  const ws = wb.Sheets[wb.SheetNames[0]!]!;
+  return XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }) as unknown[][];
 }
 
 // =============================================================================
@@ -136,12 +152,23 @@ export function CogsCsvImport() {
   const [parseErrors, setParseErrors] = useState<ParseError[]>([]);
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
+  const [isDownloadingCsv, setIsDownloadingCsv] = useState(false);
+  const [isDownloadingXlsx, setIsDownloadingXlsx] = useState(false);
   const [commitDone, setCommitDone] = useState<{ updated: number; unmatched: number } | null>(null);
 
   const csvImport = useCsvImport();
 
   const previewData = csvImport.data?.mode === 'preview' ? csvImport.data : null;
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  const applyParsedResult = (result: { rows: ParsedRow[]; errors: ParseError[] }) => {
+    setParseErrors(result.errors);
+    setParsedRows(result.rows);
+    if (result.errors.length === 0 && result.rows.length > 0) {
+      csvImport.mutate({ mode: 'preview', rows: result.rows });
+    }
+  };
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -152,19 +179,27 @@ export function CogsCsvImport() {
     csvImport.reset();
     setCommitDone(null);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      const { rows, errors } = parseCsv(text);
-      setParseErrors(errors);
-      setParsedRows(rows);
+    const isXlsx =
+      file.name.endsWith('.xlsx') ||
+      file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-      // Auto-preview if no hard errors
-      if (errors.length === 0 && rows.length > 0) {
-        csvImport.mutate({ mode: 'preview', rows });
-      }
-    };
-    reader.readAsText(file);
+    if (isXlsx) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const buffer = e.target?.result as ArrayBuffer;
+        const raw2D = xlsxTo2D(buffer);
+        applyParsedResult(parseRows(raw2D));
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        const raw2D = csvTo2D(text);
+        applyParsedResult(parseRows(raw2D));
+      };
+      reader.readAsText(file);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -184,7 +219,6 @@ export function CogsCsvImport() {
               updated: data.updated ?? 0,
               unmatched: data.unmatched ?? 0,
             });
-            // Reset file state
             setFileName(null);
             setParsedRows([]);
             if (fileInputRef.current) fileInputRef.current.value = '';
@@ -194,12 +228,10 @@ export function CogsCsvImport() {
     );
   };
 
-  const handleDownloadTemplate = async () => {
-    setIsDownloading(true);
+  const handleDownloadCsv = async () => {
+    setIsDownloadingCsv(true);
     try {
-      const response = await apiClient.get('/sellers/cogs/template', {
-        responseType: 'blob',
-      });
+      const response = await apiClient.get('/sellers/cogs/template', { responseType: 'blob' });
       const url = URL.createObjectURL(new Blob([response.data as BlobPart]));
       const a = document.createElement('a');
       a.href = url;
@@ -207,7 +239,24 @@ export function CogsCsvImport() {
       a.click();
       URL.revokeObjectURL(url);
     } finally {
-      setIsDownloading(false);
+      setIsDownloadingCsv(false);
+    }
+  };
+
+  const handleDownloadXlsx = async () => {
+    setIsDownloadingXlsx(true);
+    try {
+      const response = await apiClient.get('/sellers/cogs/template/xlsx', { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([response.data as BlobPart], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'percepta-cogs-template.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsDownloadingXlsx(false);
     }
   };
 
@@ -253,22 +302,38 @@ export function CogsCsvImport() {
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-brand-800">Start with our pre-filled template</p>
           <p className="mt-0.5 text-xs text-brand-600">
-            Your product list with current prices is already included. Just fill in the{' '}
-            <code className="rounded bg-brand-100 px-1">cogs_rands</code> column.
+            Your product list with current prices is already included. Just fill in the highlighted
+            cost columns and upload the file back.
           </p>
         </div>
-        <button
-          onClick={handleDownloadTemplate}
-          disabled={isDownloading}
-          className="btn-secondary flex flex-shrink-0 items-center gap-1.5 text-xs"
-        >
-          {isDownloading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Download className="h-3.5 w-3.5" />
-          )}
-          Download template
-        </button>
+        <div className="flex flex-shrink-0 flex-col gap-1.5 sm:flex-row">
+          <button
+            onClick={handleDownloadXlsx}
+            disabled={isDownloadingXlsx}
+            className="btn-primary flex items-center gap-1.5 text-xs"
+            title="Recommended — formatted Excel workbook"
+          >
+            {isDownloadingXlsx ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+            )}
+            Excel (.xlsx)
+          </button>
+          <button
+            onClick={handleDownloadCsv}
+            disabled={isDownloadingCsv}
+            className="btn-secondary flex items-center gap-1.5 text-xs"
+            title="Plain CSV — for advanced users"
+          >
+            {isDownloadingCsv ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+            CSV
+          </button>
+        </div>
       </div>
 
       {/* Drop zone */}
@@ -285,13 +350,13 @@ export function CogsCsvImport() {
               <span className="text-brand-700">{fileName}</span>
             ) : (
               <>
-                Drop your CSV here, or{' '}
+                Drop your file here, or{' '}
                 <span className="text-brand-600 underline">browse</span>
               </>
             )}
           </p>
           <p className="mt-1 text-xs text-gray-400">
-            Accepts .csv files — must include offer_id and cogs_rands columns
+            Accepts .xlsx or .csv — must include offer_id and cogs_rands columns
           </p>
         </div>
       </div>
@@ -299,7 +364,7 @@ export function CogsCsvImport() {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".csv,text/csv"
+        accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];

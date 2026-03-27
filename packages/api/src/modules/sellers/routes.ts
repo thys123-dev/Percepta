@@ -8,6 +8,7 @@ import { TakealotClient } from '../takealot-client/index.js';
 import { encrypt } from '../../config/encryption.js';
 import { initialSyncQueue, calculateProfitsQueue } from '../sync/queues.js';
 import { env } from '../../config/env.js';
+import ExcelJS from 'exceljs';
 
 const connectApiKeySchema = z.object({
   apiKey: z.string().min(10),
@@ -285,6 +286,117 @@ export async function sellerRoutes(server: FastifyInstance) {
   });
 
   // ---------------------------------------------------------------------------
+  // GET /api/sellers/cogs/template/xlsx — Download pre-filled Excel template
+  // ---------------------------------------------------------------------------
+  server.get('/cogs/template/xlsx', { preHandler: [authenticate] }, async (request, reply) => {
+    const { sellerId } = request.user as { sellerId: string };
+
+    const offers = await db
+      .select({
+        offerId: schema.offers.offerId,
+        sku: schema.offers.sku,
+        title: schema.offers.title,
+        sellingPriceCents: schema.offers.sellingPriceCents,
+        cogsCents: schema.offers.cogsCents,
+        inboundCostCents: schema.offers.inboundCostCents,
+      })
+      .from(schema.offers)
+      .where(eq(schema.offers.sellerId, sellerId))
+      .orderBy(desc(schema.offers.salesUnits30d));
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Percepta';
+    workbook.created = new Date();
+
+    const sheet = workbook.addWorksheet('COGS Template', {
+      views: [{ state: 'frozen', ySplit: 3 }],
+    });
+
+    // ── Column definitions ──────────────────────────────────────────────────
+    sheet.columns = [
+      { key: 'offerId',   width: 12 },
+      { key: 'sku',       width: 22 },
+      { key: 'title',     width: 42 },
+      { key: 'price',     width: 18 },
+      { key: 'cogs',      width: 22 },
+      { key: 'inbound',   width: 22 },
+    ];
+
+    // ── Row 1: Banner ───────────────────────────────────────────────────────
+    sheet.mergeCells('A1:F1');
+    const bannerCell = sheet.getCell('A1');
+    bannerCell.value = 'Percepta COGS Template — Fill in the highlighted yellow columns only. Do not edit columns A–D.';
+    bannerCell.font = { bold: true, color: { argb: 'FF1E3A5F' }, size: 11 };
+    bannerCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD6E4F7' } };
+    bannerCell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+    sheet.getRow(1).height = 28;
+
+    // ── Row 2: Column headers ───────────────────────────────────────────────
+    const GREY_FILL: ExcelJS.Fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
+    const YELLOW_FILL: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF99' } };
+    const HEADER_FONT: Partial<ExcelJS.Font> = { bold: true, size: 10 };
+    const BORDER: Partial<ExcelJS.Border> = { style: 'thin', color: { argb: 'FFB0B0B0' } };
+    const ALL_BORDERS: Partial<ExcelJS.Borders> = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
+
+    const headers = [
+      { col: 'A', label: 'Offer ID',           fill: GREY_FILL },
+      { col: 'B', label: 'SKU',                fill: GREY_FILL },
+      { col: 'C', label: 'Product Title',      fill: GREY_FILL },
+      { col: 'D', label: 'Current Price (R)',  fill: GREY_FILL },
+      { col: 'E', label: '★ Your Cost / COGS (R)', fill: YELLOW_FILL },
+      { col: 'F', label: '★ Inbound Cost (R)',     fill: YELLOW_FILL },
+    ];
+
+    headers.forEach(({ col, label, fill }) => {
+      const cell = sheet.getCell(`${col}2`);
+      cell.value = label;
+      cell.font = HEADER_FONT;
+      cell.fill = fill;
+      cell.border = ALL_BORDERS;
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    });
+    sheet.getRow(2).height = 32;
+
+    // ── Rows 3+: Product data ───────────────────────────────────────────────
+    offers.forEach((o, i) => {
+      const rowNum = i + 3;
+      const rowFill: ExcelJS.Fill = {
+        type: 'pattern', pattern: 'solid',
+        fgColor: { argb: i % 2 === 0 ? 'FFFAFAFA' : 'FFFFFFFF' },
+      };
+
+      const setCell = (col: string, value: ExcelJS.CellValue, isEditable: boolean) => {
+        const cell = sheet.getCell(`${col}${rowNum}`);
+        cell.value = value;
+        cell.border = ALL_BORDERS;
+        cell.fill = isEditable ? YELLOW_FILL : rowFill;
+        cell.font = { size: 10, color: { argb: isEditable ? 'FF000000' : 'FF555555' } };
+        cell.alignment = { vertical: 'middle' };
+        if (typeof value === 'number') {
+          cell.numFmt = '#,##0.00';
+          cell.alignment = { vertical: 'middle', horizontal: 'right' };
+        }
+      };
+
+      setCell('A', o.offerId,                                                    false);
+      setCell('B', o.sku ?? '',                                                   false);
+      setCell('C', o.title ?? '',                                                 false);
+      setCell('D', Number(((o.sellingPriceCents ?? 0) / 100).toFixed(2)),        false);
+      setCell('E', o.cogsCents != null ? Number((o.cogsCents / 100).toFixed(2)) : null, true);
+      setCell('F', Number(((o.inboundCostCents ?? 0) / 100).toFixed(2)),         true);
+    });
+
+    // ── Autofilter on header row ────────────────────────────────────────────
+    sheet.autoFilter = { from: 'A2', to: 'F2' };
+
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    reply.header('Content-Disposition', 'attachment; filename="percepta-cogs-template.xlsx"');
+    return reply.send(Buffer.from(buffer));
+  });
+
+  // ---------------------------------------------------------------------------
   // POST /api/sellers/cogs/import — Preview or commit CSV-sourced COGS
   // ---------------------------------------------------------------------------
   server.post('/cogs/import', { preHandler: [authenticate] }, async (request) => {
@@ -397,9 +509,15 @@ export async function sellerRoutes(server: FastifyInstance) {
 
     const updates = profileSchema.parse(request.body);
 
+    // Drizzle maps `decimal` columns to `string`, so convert the number from Zod
+    const { targetMarginPct, ...rest } = updates;
     const [updated] = await db
       .update(schema.sellers)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({
+        ...rest,
+        ...(targetMarginPct !== undefined && { targetMarginPct: targetMarginPct.toString() }),
+        updatedAt: new Date(),
+      })
       .where(eq(schema.sellers.id, sellerId))
       .returning({
         businessName: schema.sellers.businessName,
