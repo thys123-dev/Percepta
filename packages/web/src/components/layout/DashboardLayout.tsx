@@ -7,6 +7,7 @@ import {
   Settings,
   LogOut,
   TrendingUp,
+  Warehouse,
   Wifi,
   WifiOff,
 } from 'lucide-react';
@@ -16,6 +17,7 @@ import { AlertBell } from '../alerts/AlertBell.js';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/dashboard/inventory', label: 'Inventory', icon: Warehouse },
   { path: '/dashboard/alerts', label: 'Alerts', icon: Bell },
   { path: '/dashboard/cogs', label: 'COGS', icon: PackageCheck },
   { path: '/dashboard/fee-audit', label: 'Fee Audit', icon: Scale },

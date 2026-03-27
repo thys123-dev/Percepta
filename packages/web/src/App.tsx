@@ -12,6 +12,7 @@ const DashboardPage    = lazy(() => import('./pages/DashboardPage').then((m) => 
 const AlertsPage       = lazy(() => import('./pages/AlertsPage').then((m) => ({ default: m.AlertsPage })));
 const CogsPage         = lazy(() => import('./pages/CogsPage').then((m) => ({ default: m.CogsPage })));
 const FeeAuditPage     = lazy(() => import('./pages/FeeAuditPage').then((m) => ({ default: m.FeeAuditPage })));
+const InventoryPage    = lazy(() => import('./pages/InventoryPage').then((m) => ({ default: m.InventoryPage })));
 const OnboardingPage   = lazy(() => import('./pages/OnboardingPage').then((m) => ({ default: m.OnboardingPage })));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
 
@@ -54,6 +55,14 @@ function App() {
             element={
               <Suspense fallback={<PageLoader />}>
                 <AlertsPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="inventory"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <InventoryPage />
               </Suspense>
             }
           />

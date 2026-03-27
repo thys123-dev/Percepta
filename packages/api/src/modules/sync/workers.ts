@@ -30,7 +30,7 @@ import { processSyncSales } from './jobs/sync-sales.js';
 import { processDailySync } from './jobs/daily-sync.js';
 import { processCalculateProfits } from '../fees/profit-processor.js';
 import { processWebhook } from '../webhooks/processor.js';
-import { checkStorageWarnings } from '../alerts/alert-generator.js';
+import { checkStorageWarnings, checkLowStockAlerts } from '../alerts/alert-generator.js';
 import { processSendWeeklyDigest } from '../email/jobs/send-weekly-digest.js';
 
 const CONCURRENCY = 2; // Be gentle on Takealot API
@@ -160,6 +160,16 @@ export function startWorkers() {
         })
         .catch((err: Error) => {
           console.error(`[daily-sync] Storage warning check failed: ${err.message}`);
+        });
+
+      checkLowStockAlerts(job.data.sellerId)
+        .then((count) => {
+          if (count > 0) {
+            console.info(`[daily-sync] Created ${count} low-stock alerts for seller ${job.data.sellerId}`);
+          }
+        })
+        .catch((err: Error) => {
+          console.error(`[daily-sync] Low-stock alert check failed: ${err.message}`);
         });
     }
   });
