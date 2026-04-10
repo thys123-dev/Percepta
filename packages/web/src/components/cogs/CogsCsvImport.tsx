@@ -481,7 +481,7 @@ export function CogsCsvImport() {
               <p className="text-xs text-gray-500">
                 Ready to update {previewData.matched} product
                 {previewData.matched !== 1 ? 's' : ''}.
-                {(previewData.unmatched ?? 0) > 0 && ` ${previewData.unmatched} row${previewData.unmatched > 1 ? 's' : ''} will be skipped.`}
+                {(previewData.unmatched ?? 0) > 0 && ` ${previewData.unmatched} row${(previewData.unmatched ?? 0) > 1 ? 's' : ''} will be skipped.`}
               </p>
               <button
                 onClick={handleCommit}

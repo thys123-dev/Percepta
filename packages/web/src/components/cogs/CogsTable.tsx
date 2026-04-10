@@ -295,7 +295,7 @@ export function CogsTable() {
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-center gap-1.5">
                               {mergedEdit.error && (
-                                <AlertCircle className="h-4 w-4 text-red-500" title={mergedEdit.error} />
+                                <AlertCircle className="h-4 w-4 text-red-500" aria-label={mergedEdit.error} />
                               )}
                               {mergedEdit.saved && !mergedEdit.dirty && (
                                 <Check className="h-4 w-4 text-green-500" />

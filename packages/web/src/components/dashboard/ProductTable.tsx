@@ -135,12 +135,12 @@ const columns = [
         {row.original.cogsIsEstimated ? (
           <AlertTriangle
             className="h-3.5 w-3.5 flex-shrink-0 text-yellow-500"
-            title="Estimated COGS — click expand to update"
+            aria-label="Estimated COGS — click expand to update"
           />
         ) : (
           <CheckCircle2
             className="h-3.5 w-3.5 flex-shrink-0 text-green-500"
-            title="Manual COGS"
+            aria-label="Manual COGS"
           />
         )}
       </div>
