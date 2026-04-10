@@ -4,6 +4,10 @@ import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
+import fastifyStatic from '@fastify/static';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { existsSync } from 'fs';
 import { env } from './config/env.js';
 
 // Initialise Sentry early so it captures all subsequent errors.
@@ -50,7 +54,18 @@ export async function buildServer() {
   });
 
   await server.register(helmet, {
-    contentSecurityPolicy: env.NODE_ENV === 'production' ? undefined : false,
+    contentSecurityPolicy: env.NODE_ENV === 'production'
+      ? {
+          directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", 'data:', 'blob:'],
+            connectSrc: ["'self'", 'wss:', 'https:'],
+            fontSrc: ["'self'"],
+          },
+        }
+      : false,
   });
 
   await server.register(rateLimit, {
@@ -101,6 +116,32 @@ export async function buildServer() {
   await server.register(accountTransactionRoutes, { prefix: '/api/account-transactions' });
   await server.register(inventoryRoutes, { prefix: '/api/inventory' });
   await server.register(emailRoutes, { prefix: '/api/email' });
+
+  // ── Serve frontend SPA in production ─────────────────────────────────
+  if (env.NODE_ENV === 'production') {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    // From dist/server.js → packages/api/dist/ → up to packages/ → web/dist/
+    const webDistPath = join(__dirname, '..', '..', 'web', 'dist');
+
+    if (existsSync(webDistPath)) {
+      await server.register(fastifyStatic, {
+        root: webDistPath,
+        prefix: '/',
+        decorateReply: false,
+      });
+
+      // SPA fallback: non-API GET requests return index.html for client-side routing
+      server.setNotFoundHandler(async (request, reply) => {
+        if (request.method === 'GET' && !request.url.startsWith('/api')) {
+          return reply.sendFile('index.html');
+        }
+        return reply.status(404).send({ error: 'Not Found' });
+      });
+    } else {
+      server.log.warn(`Web dist not found at ${webDistPath} — serving API only`);
+    }
+  }
 
   return server;
 }

@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_URL || window.location.origin;
 
 // Singleton socket — shared across all components
 let globalSocket: Socket | null = null;
