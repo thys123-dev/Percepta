@@ -128,7 +128,6 @@ export async function buildServer() {
       await server.register(fastifyStatic, {
         root: webDistPath,
         prefix: '/',
-        decorateReply: false,
       });
 
       // SPA fallback: non-API GET requests return index.html for client-side routing
