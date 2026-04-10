@@ -31,11 +31,13 @@ const EXCLUDED_STATUSES = ['Returned', 'Return Requested', 'Cancelled'];
 // Validators
 // =============================================================================
 
-const periodQuerySchema = z.object({
+const periodBaseSchema = z.object({
   period: z.enum(['7d', '30d', '90d', 'custom']).default('30d'),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
-}).superRefine((val, ctx) => {
+});
+
+const periodQuerySchema = periodBaseSchema.superRefine((val, ctx) => {
   if (val.period === 'custom' && !val.startDate) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -45,7 +47,7 @@ const periodQuerySchema = z.object({
   }
 });
 
-const productsQuerySchema = periodQuerySchema.extend({
+const productsQuerySchema = periodBaseSchema.extend({
   sort: z
     .enum(['margin_pct', 'revenue', 'profit', 'units_sold', 'fees', 'last_sale'])
     .default('margin_pct'),
@@ -287,7 +289,8 @@ export async function dashboardRoutes(server: FastifyInstance) {
       last_sale:  sql`MAX(${schema.orders.orderDate})`,
     } as const;
 
-    const sortExpr = sortExprMap[params.sort] ?? sortExprMap.margin_pct;
+    const sortKey = params.sort as keyof typeof sortExprMap;
+    const sortExpr = sortExprMap[sortKey] ?? sortExprMap.margin_pct;
     const orderFn  = params.order === 'desc' ? desc : asc;
 
     const products = await db
