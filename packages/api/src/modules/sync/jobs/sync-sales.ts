@@ -43,7 +43,7 @@ export async function processSyncSales(
       new Date(startDate),
       new Date(endDate),
       async (completed, chunk) => {
-        await job.updateProgress(50 + Math.min(40, Math.floor(completed / 10)));
+        await job.updateProgress?.(50 + Math.min(40, Math.floor(completed / 10)));
         await publishProgress({
           type: 'sync:progress',
           sellerId,

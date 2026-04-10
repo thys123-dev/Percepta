@@ -267,7 +267,7 @@ export async function processCalculateProfits(
     }
 
     // Update job progress
-    await job.updateProgress(Math.round((Math.min(i + 100, orderIds.length) / orderIds.length) * 100));
+    await job.updateProgress?.(Math.round((Math.min(i + 100, orderIds.length) / orderIds.length) * 100));
   }
 
   console.info(

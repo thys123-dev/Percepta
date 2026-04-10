@@ -62,7 +62,7 @@ export async function processSyncOffers(job: Job<SyncOffersJobData>): Promise<{ 
     // Stream offers page by page
     for await (const offersBatch of client.fetchAllOffers(
       async (completed, total) => {
-        await job.updateProgress(Math.floor((completed / total) * 50)); // 0–50%
+        await job.updateProgress?.(Math.floor((completed / total) * 50)); // 0–50%
         await publishProgress({
           type: 'sync:progress',
           sellerId,
