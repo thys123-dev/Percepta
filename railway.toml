@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm ci --include=dev && npm run build"
+buildCommand = "npm install --include=dev && npm run build"
 
 [deploy]
 startCommand = "npx tsx packages/api/src/db/migrate.ts && node packages/api/dist/server.js"
