@@ -6,6 +6,8 @@ import { DashboardLayout } from './components/layout/DashboardLayout';
 // Eagerly loaded — tiny pages that gate authentication
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 
 // Lazily loaded — heavy pages only loaded when navigated to
 const DashboardPage    = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
@@ -31,6 +33,8 @@ function App() {
         {/* Auth routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route
           path="/onboarding"
           element={

@@ -1,10 +1,21 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import bcrypt from 'bcrypt';
+import { randomBytes, createHash } from 'crypto';
 import { db, schema } from '../../db/index.js';
-import { eq } from 'drizzle-orm';
+import { and, eq, gt } from 'drizzle-orm';
 import { authenticate } from '../../middleware/auth.js';
 import { env } from '../../config/env.js';
+import { sendEmail } from '../email/email-service.js';
+import {
+  passwordResetEmailHtml,
+  passwordResetEmailText,
+} from '../email/templates/password-reset.js';
+
+// Reset tokens are valid for 1 hour. Long enough for users to find the email,
+// short enough to limit damage if a token leaks.
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
+const PASSWORD_RESET_TTL_MINUTES = 60;
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -16,6 +27,23 @@ const loginSchema = z.object({
   email: z.string().email(),
   password: z.string(),
 });
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(32).max(128),
+  password: z.string().min(8),
+});
+
+/**
+ * SHA-256 hash of the raw token. We never store the raw token in the DB —
+ * if the database leaks, leaked hashes can't be used as reset tokens.
+ */
+function hashResetToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
 
 export async function authRoutes(server: FastifyInstance) {
   // POST /api/auth/register
@@ -139,6 +167,129 @@ export async function authRoutes(server: FastifyInstance) {
       return reply.status(401).send({ message: 'Invalid or expired refresh token' });
     }
   });
+
+  // POST /api/auth/forgot-password
+  // Always returns success regardless of whether the email exists, so this
+  // endpoint cannot be used to enumerate registered accounts.
+  server.post(
+    '/forgot-password',
+    { config: { rateLimit: { max: 3, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const body = forgotPasswordSchema.parse(request.body);
+      const normalisedEmail = body.email.toLowerCase().trim();
+
+      const [seller] = await db
+        .select({
+          id: schema.sellers.id,
+          email: schema.sellers.email,
+          businessName: schema.sellers.businessName,
+        })
+        .from(schema.sellers)
+        .where(eq(schema.sellers.email, normalisedEmail))
+        .limit(1);
+
+      if (seller) {
+        // Generate a cryptographically random token (256 bits, hex-encoded → 64 chars)
+        const rawToken = randomBytes(32).toString('hex');
+        const tokenHash = hashResetToken(rawToken);
+        const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+
+        await db
+          .update(schema.sellers)
+          .set({
+            passwordResetTokenHash: tokenHash,
+            passwordResetExpiresAt: expiresAt,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.sellers.id, seller.id));
+
+        const resetUrl = `${env.FRONTEND_URL.replace(/\/$/, '')}/reset-password?token=${rawToken}`;
+
+        try {
+          await sendEmail({
+            to: seller.email,
+            subject: 'Reset your Percepta password',
+            html: passwordResetEmailHtml({
+              resetUrl,
+              businessName: seller.businessName,
+              expiresInMinutes: PASSWORD_RESET_TTL_MINUTES,
+            }),
+            text: passwordResetEmailText({
+              resetUrl,
+              businessName: seller.businessName,
+              expiresInMinutes: PASSWORD_RESET_TTL_MINUTES,
+            }),
+          });
+          server.log.info({ sellerId: seller.id }, 'Password reset email sent');
+        } catch (err) {
+          // Log but don't surface to the client — the response shape is the
+          // same whether the email succeeded or not, to prevent enumeration.
+          server.log.error({ err, sellerId: seller.id }, 'Failed to send password reset email');
+        }
+      } else {
+        server.log.info({ email: normalisedEmail }, 'Password reset requested for unknown email');
+      }
+
+      return reply.status(200).send({
+        success: true,
+        message:
+          'If an account exists for that email, a password reset link has been sent.',
+      });
+    }
+  );
+
+  // POST /api/auth/reset-password
+  // Validates the single-use token, updates the password, and invalidates the token.
+  server.post(
+    '/reset-password',
+    { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const body = resetPasswordSchema.parse(request.body);
+      const tokenHash = hashResetToken(body.token);
+
+      const [seller] = await db
+        .select({
+          id: schema.sellers.id,
+          email: schema.sellers.email,
+        })
+        .from(schema.sellers)
+        .where(
+          and(
+            eq(schema.sellers.passwordResetTokenHash, tokenHash),
+            gt(schema.sellers.passwordResetExpiresAt, new Date())
+          )
+        )
+        .limit(1);
+
+      if (!seller) {
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'This reset link is invalid or has expired. Please request a new one.',
+        });
+      }
+
+      const passwordHash = await bcrypt.hash(body.password, 12);
+
+      await db
+        .update(schema.sellers)
+        .set({
+          passwordHash,
+          // Single-use: clear the token so it can't be reused
+          passwordResetTokenHash: null,
+          passwordResetExpiresAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.sellers.id, seller.id));
+
+      server.log.info({ sellerId: seller.id }, 'Password reset completed');
+
+      return reply.status(200).send({
+        success: true,
+        message: 'Password updated successfully. You can now sign in with your new password.',
+      });
+    }
+  );
 
   // DELETE /api/auth/account — POPIA right to erasure
   // Deletes the seller and all associated data (cascades via FK constraints).

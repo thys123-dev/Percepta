@@ -40,6 +40,11 @@ export const sellers = pgTable('sellers', {
   emailMarginThreshold: decimal('email_margin_threshold', { precision: 5, scale: 2 }).default('15.00'),
   lastWeeklyDigestAt: timestamp('last_weekly_digest_at', { withTimezone: true }),
 
+  // Password reset (forgot-password flow). Token is stored as a SHA-256 hash;
+  // the raw token is only ever sent in the reset email and never persisted.
+  passwordResetTokenHash: varchar('password_reset_token_hash', { length: 64 }),
+  passwordResetExpiresAt: timestamp('password_reset_expires_at', { withTimezone: true }),
+
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
