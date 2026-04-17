@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -54,6 +54,36 @@ export function OnboardingPage() {
 
   // ── Poll sync status ──────────────────────────────────────────────────────
   const { data: syncStatus } = useSyncStatus();
+
+  // ── Smart resume: route the user to the right step on first load ──────────
+  // Without this, every visit to /onboarding starts at Step 1 ("Connect")
+  // even if the user has already connected, synced, or completed onboarding.
+  const initialRouteAppliedRef = useRef(false);
+  useEffect(() => {
+    if (initialRouteAppliedRef.current) return;
+    if (!syncStatus) return; // wait for the first status fetch to land
+    initialRouteAppliedRef.current = true;
+
+    // Already fully onboarded → bypass the wizard entirely
+    if (syncStatus.onboardingComplete) {
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+
+    // Resume at the right step based on backend state
+    if (syncStatus.status === 'complete') {
+      // Sync done but onboarding not marked complete → let them set COGS
+      setStep('cogs');
+    } else if (
+      syncStatus.status === 'syncing' ||
+      syncStatus.status === 'failed' ||
+      (syncStatus.status === 'pending' && syncStatus.isQueued)
+    ) {
+      // Sync is in progress or queued → show the syncing screen
+      setStep('syncing');
+    }
+    // else: status === 'pending' with no queued job → fresh seller, stay on 'connect'
+  }, [syncStatus, navigate]);
 
   // Advance syncing → cogs when sync completes
   if (step === 'syncing' && syncStatus?.status === 'complete') {
