@@ -83,11 +83,26 @@ export async function syncRoutes(server: FastifyInstance) {
       .set({ initialSyncStatus: 'pending', updatedAt: new Date() })
       .where(eq(schema.sellers.id, sellerId));
 
-    // Queue the initial sync (use jobId to prevent duplicates)
+    // Remove any stuck/stalled/completed prior job with the same ID. BullMQ
+    // deduplicates by jobId across ALL states, so without this clean-up a
+    // crashed-mid-job worker would block all future retries.
+    const jobId = `initial-sync-${sellerId}`;
+    const existingJob = await initialSyncQueue.getJob(jobId);
+    if (existingJob) {
+      await existingJob.remove().catch((err: Error) => {
+        request.log.warn({ err, jobId }, 'Failed to remove existing initial-sync job');
+      });
+    }
+
+    // Queue fresh initial sync with auto-cleanup retention
     await initialSyncQueue.add(
       'initial-sync',
       { sellerId },
-      { jobId: `initial-sync-${sellerId}`, removeOnFail: false }
+      {
+        jobId,
+        removeOnComplete: { count: 10, age: 24 * 60 * 60 },
+        removeOnFail: { count: 50, age: 7 * 24 * 60 * 60 },
+      }
     );
 
     return {
