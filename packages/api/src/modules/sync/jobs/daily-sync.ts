@@ -1,12 +1,20 @@
 /**
- * dailySync Job Processor
+ * dailySync Job Processor — Webhook-First Reconciliation
  *
- * Nightly reconciliation job — catches any sales missed by webhooks.
- * Runs for every seller with a completed initial sync.
+ * Per Takealot's official API guidance:
+ *   - Use webhooks for real-time updates (orders, offer changes)
+ *   - Avoid full re-polling of slow-changing data
+ *   - "Aggregate and store data on your systems" — don't treat the API as a
+ *     real-time source
  *
- * Fetches the last 7 days of sales (overlap window) and upserts.
- * This is intentionally conservative: webhooks handle real-time,
- * daily sync is a safety net for missed deliveries.
+ * This job is intentionally LIGHTWEIGHT. It does NOT re-fetch all offers
+ * (Offer Updated webhook handles those changes). It performs a small
+ * 24-hour sales reconciliation as a safety net for missed webhook
+ * deliveries, then runs local alert checks against the database.
+ *
+ * If a seller suspects data drift (e.g. their dashboard counts don't match
+ * Takealot's own portal), they can trigger a full re-sync manually via
+ * POST /api/sync/trigger.
  *
  * Scheduled: every day at 02:00 AM (set up in workers.ts)
  */
@@ -14,12 +22,17 @@
 import type { Job } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../../../db/index.js';
-import { processSyncOffers } from './sync-offers.js';
 import { processSyncSales } from './sync-sales.js';
 import type { DailySyncJobData } from '../queues.js';
 
-// Overlap window: re-fetch last N days to catch missed webhooks
-const RECONCILIATION_WINDOW_DAYS = 7;
+/**
+ * Sales reconciliation window. Webhooks (New Leadtime Order / New Drop Ship
+ * Order / Sale Status Changed) should deliver updates in real-time, so this
+ * is a small overlap to catch any genuinely missed deliveries — NOT a full
+ * re-poll. Anything older than this is the user's responsibility to
+ * reconcile manually if they spot a discrepancy.
+ */
+const RECONCILIATION_WINDOW_DAYS = 1;
 
 export async function processDailySync(
   job: Job<DailySyncJobData>
@@ -40,17 +53,27 @@ export async function processDailySync(
     .limit(1);
 
   if (!seller || seller.initialSyncStatus !== 'complete') {
-    console.info(`[DailySync] Skipping seller ${sellerId} — sync status: ${seller?.initialSyncStatus}`);
+    console.info(
+      `[DailySync] Skipping seller ${sellerId} — sync status: ${seller?.initialSyncStatus}`
+    );
     return { offersCount: 0, ordersCount: 0 };
   }
 
-  // Refresh offers (prices, stock levels may have changed)
-  const { syncedCount: offersCount } = await processSyncOffers({
-    ...job,
-    data: { sellerId, triggeredBy: 'daily-sync' },
-  } as Job<{ sellerId: string; triggeredBy: 'daily-sync' }>);
+  // ── Offers: NO re-poll ──────────────────────────────────────────────────
+  // Takealot docs: "Offer information rarely changes, only the stock values
+  // associated with it gets updated frequently. Use the Offer Updated
+  // webhook for updates on offer related value changes."
+  //
+  // We rely on the Offer Updated and Offer Created webhooks to keep the
+  // local offers table fresh. A nightly full re-poll would be both wasteful
+  // (rate limits) and a violation of Takealot's stated best practices.
+  const offersCount = 0;
 
-  // Re-fetch last 7 days to catch any webhook delivery failures
+  // ── Sales: 24-hour safety-net reconciliation ───────────────────────────
+  // Webhooks should already have delivered every order in this window.
+  // The reconciliation upserts on (sellerId, orderItemId) so any orders
+  // already inserted via webhook are no-ops; only genuinely missed
+  // deliveries result in inserts.
   const endDate = new Date();
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - RECONCILIATION_WINDOW_DAYS);

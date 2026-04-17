@@ -152,10 +152,10 @@ export function startWorkers() {
 
   dailySyncWorker.on('completed', (job, result) => {
     console.info(
-      `[daily-sync] ✓ Seller ${job.data.sellerId}: refreshed ${result.offersCount} offers, ${result.ordersCount} orders`
+      `[daily-sync] ✓ Seller ${job.data.sellerId}: ${result.ordersCount} orders reconciled (offers via webhooks)`
     );
 
-    // Check for storage warning alerts after offers are refreshed
+    // Run local alert checks (no Takealot API calls — uses cached offer data)
     if (job.data.sellerId !== '__all__') {
       checkStorageWarnings(job.data.sellerId)
         .then((count) => {
