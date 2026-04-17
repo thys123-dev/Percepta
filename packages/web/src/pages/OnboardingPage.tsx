@@ -92,6 +92,15 @@ export function OnboardingPage() {
 
   const updateCogsMutation = useUpdateCogs();
 
+  // Manual sync retry — used when initial sync fails
+  const retrySyncMutation = useMutation({
+    mutationFn: () => apiClient.post('/sync/trigger').then((r) => r.data),
+    onSuccess: () => {
+      // Force re-poll of sync status to reflect the new 'pending' state
+      queryClient.invalidateQueries({ queryKey: ['sync-status'] });
+    },
+  });
+
   const completeOnboardingMutation = useMutation({
     mutationFn: () =>
       apiClient.patch('/sellers/profile', { onboardingComplete: true }).then((r) => r.data),
@@ -300,8 +309,32 @@ export function OnboardingPage() {
               )}
 
               {syncStatus?.status === 'failed' && (
-                <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-                  Sync failed. Don't worry — it will retry automatically.
+                <div className="mb-4 space-y-3">
+                  <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+                    Sync failed. You can retry below or contact support if the issue persists.
+                  </div>
+                  <button
+                    onClick={() => retrySyncMutation.mutate()}
+                    disabled={retrySyncMutation.isPending}
+                    className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {retrySyncMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Restarting sync...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4" />
+                        Retry sync
+                      </>
+                    )}
+                  </button>
+                  {retrySyncMutation.isError && (
+                    <div className="text-xs text-red-600">
+                      Failed to restart sync. Please refresh the page and try again.
+                    </div>
+                  )}
                 </div>
               )}
 

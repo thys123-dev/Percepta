@@ -131,11 +131,29 @@ async function handleNewOrder(
     return { handled: false, action: 'missing-fields' };
   }
 
-  const quantity = data.quantity ?? 1;
+  // Validate numeric fields to prevent NaN/Infinity from corrupting the order record.
+  // Takealot webhooks should always include these, but defend against malformed payloads.
+  if (typeof data.selling_price !== 'number' || !Number.isFinite(data.selling_price) || data.selling_price < 0) {
+    console.warn(
+      `[Webhook Processor] New order ${data.order_item_id} has invalid selling_price: ${data.selling_price} (seller ${sellerId})`
+    );
+    return { handled: false, action: 'invalid-selling-price' };
+  }
+
+  const rawQuantity = data.quantity ?? 1;
+  if (typeof rawQuantity !== 'number' || !Number.isFinite(rawQuantity) || rawQuantity <= 0) {
+    console.warn(
+      `[Webhook Processor] New order ${data.order_item_id} has invalid quantity: ${rawQuantity} (seller ${sellerId})`
+    );
+    return { handled: false, action: 'invalid-quantity' };
+  }
+
+  const quantity = rawQuantity;
   const sellingPriceCents = Math.round(data.selling_price * 100);
-  const unitPriceCents = data.unit_price
-    ? Math.round(data.unit_price * 100)
-    : Math.round(sellingPriceCents / quantity);
+  const unitPriceCents =
+    typeof data.unit_price === 'number' && Number.isFinite(data.unit_price)
+      ? Math.round(data.unit_price * 100)
+      : Math.round(sellingPriceCents / quantity);
 
   const fulfillmentDc = data.dc ?? null;
   const customerDc = data.customer_dc ?? null;

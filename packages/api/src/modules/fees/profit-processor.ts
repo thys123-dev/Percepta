@@ -108,6 +108,16 @@ export async function processCalculateProfits(
 
     for (const order of orderRows) {
       try {
+        // Guard against invalid quantity to prevent division-by-zero / Infinity propagation.
+        // Takealot API enforces quantity >= 1, but defensively skip bad rows rather than
+        // crash the whole batch.
+        if (!order.quantity || order.quantity <= 0) {
+          console.warn(
+            `[calculate-profits] Skipping order ${order.orderId}: invalid quantity ${order.quantity}`
+          );
+          continue;
+        }
+
         // Look up the corresponding offer from the pre-fetched map
         let offer: FeeOfferInput;
         let cogsPerUnitCents = 0;
