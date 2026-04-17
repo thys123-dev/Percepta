@@ -32,6 +32,13 @@ export async function processCalculateProfits(
   let calculated = 0;
   let lossMakers = 0;
 
+  // Only fire alert emails for real-time webhook-triggered profit calcs.
+  // Bulk operations (initial-sync, daily-sync, COGS recalc) would otherwise
+  // queue hundreds of emails and trigger Resend rate limits — and the user
+  // didn't ask for an email blast just because they connected their account.
+  // In-app dashboard alerts are still created in all cases.
+  const sendEmailAlerts = job.name === 'calculate-from-webhook';
+
   // Process in batches of 100 for memory efficiency
   for (let i = 0; i < orderIds.length; i += 100) {
     const batchIds = orderIds.slice(i, i + 100);
@@ -246,24 +253,26 @@ export async function processCalculateProfits(
         const alertTitle =
           (order.offerIdNum ? offerRowsMap.get(order.offerIdNum)?.title : null) ?? 'Unknown Product';
 
-        // Loss-maker alert
+        // Loss-maker alert (email only on webhook-triggered runs)
         checkLossMakerAlert({
           sellerId,
           offerId: order.offerIdNum,
           productTitle: alertTitle,
           netProfitCents: profitResult.netProfitCents,
           marginPct: profitResult.profitMarginPct,
+          sendEmail: sendEmailAlerts,
         }).catch((err: Error) =>
           console.error(`[alert] loss_maker check failed: ${err.message}`)
         );
 
-        // Margin drop alert
+        // Margin drop alert (email only on webhook-triggered runs)
         checkMarginDropAlert({
           sellerId,
           offerId: order.offerIdNum,
           productTitle: alertTitle,
           currentMarginPct: profitResult.profitMarginPct,
           netProfitCents: profitResult.netProfitCents,
+          sendEmail: sendEmailAlerts,
         }).catch((err: Error) =>
           console.error(`[alert] margin_drop check failed: ${err.message}`)
         );

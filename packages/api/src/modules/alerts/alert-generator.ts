@@ -111,6 +111,13 @@ export async function checkLossMakerAlert(params: {
   productTitle: string;
   netProfitCents: number;
   marginPct: number;
+  /**
+   * When false (default), the in-app DB alert is still created but no email
+   * is sent. Set to true ONLY for real-time webhook-triggered processing —
+   * bulk operations (initial-sync, daily-sync, COGS recalculation) would
+   * otherwise spam hundreds of emails on a single trigger.
+   */
+  sendEmail?: boolean;
 }): Promise<void> {
   if (params.netProfitCents >= 0) return;
 
@@ -127,8 +134,8 @@ export async function checkLossMakerAlert(params: {
     actionUrl: '/dashboard',
   });
 
-  // Send email if seller has loss alerts enabled (only when a new alert was created)
-  if (alertId) {
+  // Send email only when explicitly requested (webhook flow) and a new alert was created
+  if (alertId && params.sendEmail) {
     const [seller] = await db
       .select({ email: schema.sellers.email, businessName: schema.sellers.businessName, emailLossAlerts: schema.sellers.emailLossAlerts })
       .from(schema.sellers)
@@ -178,6 +185,11 @@ export async function checkMarginDropAlert(params: {
   productTitle: string;
   currentMarginPct: number;
   netProfitCents: number;
+  /**
+   * When false (default), the in-app DB alert is still created but no email
+   * is sent. Set to true ONLY for real-time webhook-triggered processing.
+   */
+  sendEmail?: boolean;
 }): Promise<void> {
   if (params.offerId === null) return;
 
@@ -233,7 +245,7 @@ export async function checkMarginDropAlert(params: {
 
     const threshold = parseFloat(seller?.emailMarginThreshold ?? '15.00');
 
-    if (seller?.emailLossAlerts && params.currentMarginPct < threshold) {
+    if (params.sendEmail && seller?.emailLossAlerts && params.currentMarginPct < threshold) {
       const dashboardUrl = env.FRONTEND_URL;
       sendEmail({
         to: seller.email,
