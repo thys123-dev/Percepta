@@ -192,7 +192,8 @@ export const calculatedFees = pgTable(
   },
   (table) => [
     index('calc_fees_seller_idx').on(table.sellerId),
-    index('calc_fees_order_idx').on(table.orderId),
+    // UNIQUE: required by ON CONFLICT (order_id) upserts in profit-processor.ts
+    uniqueIndex('calc_fees_order_idx').on(table.orderId),
   ]
 );
 
@@ -224,6 +225,8 @@ export const profitCalculations = pgTable(
   (table) => [
     index('profit_seller_idx').on(table.sellerId),
     index('profit_seller_profitable_idx').on(table.sellerId, table.isProfitable),
+    // UNIQUE: required by ON CONFLICT (order_id) upserts in profit-processor.ts
+    uniqueIndex('profit_calculations_order_id_unique_idx').on(table.orderId),
   ]
 );
 
