@@ -18,6 +18,7 @@ import { PeriodSelector } from '../components/dashboard/PeriodSelector.js';
 import { FeeSummary } from '../components/dashboard/FeeSummary.js';
 import { FeeAuditSummaryCard } from '../components/dashboard/FeeAuditSummaryCard.js';
 import { RevenueTargetCard } from '../components/dashboard/RevenueTargetCard.js';
+import { SyncNowButton } from '../components/dashboard/SyncNowButton.js';
 import type { Period, PeriodParams } from '../hooks/useDashboard.js';
 
 export function DashboardPage() {
@@ -43,14 +44,17 @@ export function DashboardPage() {
           </p>
         </div>
 
-        <PeriodSelector
-          value={period}
-          onChange={setPeriod}
-          startDate={startDate}
-          endDate={endDate}
-          onStartDateChange={setStartDate}
-          onEndDateChange={setEndDate}
-        />
+        <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-start">
+          <PeriodSelector
+            value={period}
+            onChange={setPeriod}
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={setStartDate}
+            onEndDateChange={setEndDate}
+          />
+          <SyncNowButton />
+        </div>
       </div>
 
       {/* Profitability Scorecard — 4 KPI cards */}
