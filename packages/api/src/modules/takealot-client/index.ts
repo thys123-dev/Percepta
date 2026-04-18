@@ -29,8 +29,8 @@ export interface TakealotOffer {
   sku: string;
   barcode: string;
   title: string;
-  selling_price: number; // in cents
-  rrp: number;
+  selling_price: number; // in Rands (VAT-inclusive)
+  rrp: number;            // in Rands
   status: string;
   offer_url: string;
   product_label_number: string;
@@ -68,7 +68,7 @@ export interface TakealotSale {
   tsin: number;
   offer_id: number;
   quantity: number;
-  selling_price: number; // total (unit price × quantity), in cents
+  selling_price: number; // total (unit price × quantity), in Rands (VAT-inclusive)
   dc: string; // fulfillment DC
   customer_dc: string; // nearest DC to customer
   promotion: string;

@@ -133,8 +133,12 @@ async function upsertOffersBatch(sellerId: string, offers: TakealotOffer[]): Pro
     // 30-day sales units (sum across DCs)
     const salesUnits30d = offer.sales_units?.reduce((sum, s) => sum + s.units, 0) ?? 0;
 
+    // Takealot returns selling_price and rrp in Rands (e.g. 329.99) — convert to cents.
+    const sellingPriceCents = Math.round(offer.selling_price * 100);
+    const rrpCents = offer.rrp > 0 ? Math.round(offer.rrp * 100) : null;
+
     // Estimated COGS = 50% of selling price (if not already set — handled via conflict clause)
-    const estimatedCogs = Math.round(offer.selling_price * DEFAULT_COGS_ESTIMATE_PCT);
+    const estimatedCogs = Math.round(sellingPriceCents * DEFAULT_COGS_ESTIMATE_PCT);
 
     return {
       sellerId,
@@ -144,8 +148,8 @@ async function upsertOffersBatch(sellerId: string, offers: TakealotOffer[]): Pro
       barcode: offer.barcode ?? null,
       title: offer.title ?? 'Unknown Product',
       category: offer.category ?? null,
-      sellingPriceCents: offer.selling_price,
-      rrpCents: offer.rrp > 0 ? offer.rrp : null,
+      sellingPriceCents,
+      rrpCents,
       status: offer.status,
       weightGrams,
       lengthMm,

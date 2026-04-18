@@ -108,11 +108,15 @@ async function upsertSalesBatch(
         ? normalizesDc(sale.dc) !== normalizesDc(sale.customer_dc)
         : false;
 
-    // Unit price = total selling price / quantity (Takealot API returns total)
+    // Takealot returns selling_price in Rands (e.g. 329.99), convert to cents
+    // for storage. (Webhook handler does the same — see webhooks/processor.ts.)
+    const sellingPriceCents = Math.round(sale.selling_price * 100);
+
+    // Unit price = total selling price / quantity
     const unitPriceCents =
       sale.quantity > 0
-        ? Math.round(sale.selling_price / sale.quantity)
-        : sale.selling_price;
+        ? Math.round(sellingPriceCents / sale.quantity)
+        : sellingPriceCents;
 
     return {
       sellerId,
@@ -123,7 +127,7 @@ async function upsertSalesBatch(
       sku: sale.sku ?? null,
       productTitle: sale.product_title ?? 'Unknown Product',
       quantity: sale.quantity,
-      sellingPriceCents: sale.selling_price, // total (unit × qty)
+      sellingPriceCents, // total (unit × qty), in cents
       unitPriceCents,
       orderDate: new Date(sale.order_date),
       saleStatus: sale.sale_status ?? null,
