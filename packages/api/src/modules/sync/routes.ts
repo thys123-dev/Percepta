@@ -11,6 +11,7 @@ import { eq } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
 import { authenticate } from '../../middleware/auth.js';
 import { initialSyncQueue } from './queues.js';
+import { getSellerClient } from './utils/get-seller-client.js';
 
 export async function syncRoutes(server: FastifyInstance) {
   // GET /api/sync/status — Current sync status + stats
@@ -134,5 +135,68 @@ export async function syncRoutes(server: FastifyInstance) {
       }));
 
     return { jobs: sellerJobs };
+  });
+
+  // GET /api/sync/debug/offers — Diagnostic endpoint
+  // Returns the raw Takealot /v2/offers/count + first page of /v2/offers
+  // so we can see exactly what their API is returning for this seller's
+  // API key. Useful when our offers table comes up empty and we need to
+  // confirm whether that's an API truth or a code bug.
+  server.get('/debug/offers', { preHandler: [authenticate] }, async (request, reply) => {
+    const { sellerId } = request.user as { sellerId: string };
+
+    let client;
+    try {
+      client = await getSellerClient(sellerId);
+    } catch (err) {
+      return reply.status(400).send({
+        error: 'Could not load Takealot client for this seller',
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    const result: Record<string, unknown> = {};
+
+    // 1) Offer count
+    try {
+      const start = Date.now();
+      const countResponse = await client.getOfferCount();
+      result.offerCount = {
+        ok: true,
+        durationMs: Date.now() - start,
+        total: countResponse,
+      };
+    } catch (err) {
+      result.offerCount = {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+
+    // 2) First page of offers (raw, with all fields)
+    try {
+      const start = Date.now();
+      const firstPage = await client.getOffers(0);
+      result.firstPage = {
+        ok: true,
+        durationMs: Date.now() - start,
+        // Trim to first 5 offers to keep the response small but representative.
+        sampleOffers: (firstPage.offers ?? []).slice(0, 5),
+        totalReturnedThisPage: (firstPage.offers ?? []).length,
+        // Surface the full pagination envelope so we can see if Takealot
+        // is reporting a different total here than from /count.
+        rawEnvelope: {
+          ...firstPage,
+          offers: undefined, // Don't duplicate offers in the envelope
+        },
+      };
+    } catch (err) {
+      result.firstPage = {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+
+    return result;
   });
 }
