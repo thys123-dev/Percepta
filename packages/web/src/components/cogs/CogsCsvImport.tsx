@@ -40,9 +40,30 @@ interface ParseError {
   message: string;
 }
 
-/** Normalise a header string for column matching. */
+/**
+ * Normalise a header string for column matching: lowercase, replace any run
+ * of non-alphanumeric characters with a single underscore, then trim leading
+ * and trailing underscores. This makes "★ Your Cost / COGS (R)" → "your_cost_cogs_r".
+ */
 const normaliseHeader = (h: unknown) =>
-  String(h ?? '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  String(h ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+/**
+ * Header name aliases. The Excel template uses pretty display names
+ * (e.g. "★ Your Cost / COGS (R)"), the CSV template uses snake_case
+ * (e.g. "cogs_rands"). Both must work.
+ */
+const OFFER_ID_ALIASES = new Set(['offer_id', 'offerid']);
+const COGS_ALIASES = new Set([
+  'cogs_rands', 'cogs_r', 'cogs', 'your_cost_cogs_r', 'your_cost', 'unit_cost', 'cost',
+]);
+const INBOUND_ALIASES = new Set([
+  'inbound_cost_rands', 'inbound_cost_r', 'inbound_cost', 'inbound',
+]);
 
 /** Convert a raw cell value to a float, returning NaN if not parseable. */
 const toFloat = (v: unknown): number => {
@@ -50,6 +71,31 @@ const toFloat = (v: unknown): number => {
   if (typeof v === 'number') return v;
   return parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
 };
+
+/**
+ * Find which row in the file is the actual header row. The xlsx template
+ * has a banner row at index 0 and the real headers at index 1, so we
+ * scan the first few rows looking for one that contains both an offer_id
+ * and a cogs column. Returns -1 if no match is found.
+ */
+function findHeaderRow(rawRows: unknown[][]): {
+  rowIndex: number;
+  offerIdIdx: number;
+  cogsIdx: number;
+  inboundIdx: number;
+} | null {
+  const limit = Math.min(rawRows.length, 5);
+  for (let i = 0; i < limit; i++) {
+    const cells = (rawRows[i] as unknown[]).map(normaliseHeader);
+    const offerIdIdx = cells.findIndex((h) => OFFER_ID_ALIASES.has(h));
+    const cogsIdx = cells.findIndex((h) => COGS_ALIASES.has(h));
+    if (offerIdIdx !== -1 && cogsIdx !== -1) {
+      const inboundIdx = cells.findIndex((h) => INBOUND_ALIASES.has(h));
+      return { rowIndex: i, offerIdIdx, cogsIdx, inboundIdx };
+    }
+  }
+  return null;
+}
 
 /**
  * Parse rows from a normalised 2-D array (header row + data rows).
@@ -62,25 +108,24 @@ function parseRows(
     return { rows: [], errors: [{ row: 0, message: 'File is empty or missing headers.' }] };
   }
 
-  const headers = (rawRows[0] as unknown[]).map(normaliseHeader);
-  const offerIdIdx = headers.findIndex((h) => h === 'offer_id');
-  const cogsIdx    = headers.findIndex((h) => h === 'cogs_rands');
-  const inboundIdx = headers.findIndex((h) => h === 'inbound_cost_rands');
-
-  if (offerIdIdx === -1 || cogsIdx === -1) {
+  const header = findHeaderRow(rawRows);
+  if (!header) {
     return {
       rows: [],
       errors: [{
         row: 0,
-        message: 'Missing required columns: offer_id, cogs_rands. Please use the template.',
+        message:
+          'Could not find required columns. Expected an "Offer ID" column and a COGS column ' +
+          '(e.g. "★ Your Cost / COGS (R)" or "cogs_rands"). Please use the downloaded template.',
       }],
     };
   }
 
+  const { rowIndex, offerIdIdx, cogsIdx, inboundIdx } = header;
   const rows: ParsedRow[] = [];
   const errors: ParseError[] = [];
 
-  for (let i = 1; i < rawRows.length; i++) {
+  for (let i = rowIndex + 1; i < rawRows.length; i++) {
     const cells = rawRows[i] as unknown[];
     const rawOfferId = cells[offerIdIdx];
     const rawCogs    = cells[cogsIdx];
