@@ -125,13 +125,18 @@ async function upsertOffersBatch(sellerId: string, offers: TakealotOffer[]): Pro
         : null;
     const weightTier = weightGrams ? classifyWeightTier(weightGrams) : null;
 
-    // Stock by DC (CPT, JHB, DBN — matches bulk replenishment template)
-    const stockJhb = offer.stock_at_takealot?.find((s) => s.dc === 'JHB')?.quantity ?? 0;
-    const stockCpt = offer.stock_at_takealot?.find((s) => s.dc === 'CPT')?.quantity ?? 0;
-    const stockDbn = offer.stock_at_takealot?.find((s) => s.dc === 'DBN')?.quantity ?? 0;
+    // Stock by DC. The real API returns stock_at_takealot[] entries with
+    // shape: { warehouse: { warehouse_id, name }, quantity_available }.
+    // We match warehouses by name ("JHB" | "CPT" | "DBN").
+    const stockOf = (dcName: 'JHB' | 'CPT' | 'DBN') =>
+      offer.stock_at_takealot?.find((s) => s.warehouse?.name === dcName)?.quantity_available ?? 0;
+    const stockJhb = stockOf('JHB');
+    const stockCpt = stockOf('CPT');
+    const stockDbn = stockOf('DBN');
 
-    // 30-day sales units (sum across DCs)
-    const salesUnits30d = offer.sales_units?.reduce((sum, s) => sum + s.units, 0) ?? 0;
+    // 30-day sales units (sum across DCs). API field is sales_units (yes,
+    // the property has the same name as the parent array).
+    const salesUnits30d = offer.sales_units?.reduce((sum, s) => sum + (s.sales_units ?? 0), 0) ?? 0;
 
     // Takealot returns selling_price and rrp in Rands (e.g. 329.99) — convert to cents.
     const sellingPriceCents = Math.round(offer.selling_price * 100);
@@ -143,7 +148,7 @@ async function upsertOffersBatch(sellerId: string, offers: TakealotOffer[]): Pro
     return {
       sellerId,
       offerId: offer.offer_id,
-      tsin: offer.tsin ?? null,
+      tsin: offer.tsin_id ?? null,
       sku: offer.sku ?? null,
       barcode: offer.barcode ?? null,
       title: offer.title ?? 'Unknown Product',
@@ -164,7 +169,9 @@ async function upsertOffersBatch(sellerId: string, offers: TakealotOffer[]): Pro
       stockJhb,
       stockCpt,
       stockDbn,
-      stockCoverDays: offer.stock_cover ?? null,
+      // total_stock_cover is a single number across all DCs in the new shape;
+      // it falls back to null (not 0) so "no data" stays distinguishable from "0 days cover".
+      stockCoverDays: typeof offer.total_stock_cover === 'number' ? offer.total_stock_cover : null,
       salesUnits30d,
       leadtimeDays: offer.leadtime_days ?? 0,
       lastSyncedAt: new Date(),

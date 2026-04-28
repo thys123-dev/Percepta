@@ -1077,7 +1077,7 @@ export const DEMO_ALERTS: DemoAlert[] = [
 export function toTakealotOffer(product: DemoProduct): TakealotOffer {
   return {
     offer_id: product.offerId,
-    tsin: product.tsin,
+    tsin_id: product.tsin,
     sku: product.sku,
     barcode: product.barcode,
     title: product.title,
@@ -1089,19 +1089,25 @@ export function toTakealotOffer(product: DemoProduct): TakealotOffer {
     leadtime_days: 0,
     leadtime_stock: [],
     stock_at_takealot: [
-      ...(product.stockJhb > 0 ? [{ dc: 'JHB', quantity: product.stockJhb }] : []),
-      ...(product.stockCpt > 0 ? [{ dc: 'CPT', quantity: product.stockCpt }] : []),
-      ...(product.stockDbn > 0 ? [{ dc: 'DBN', quantity: product.stockDbn }] : []),
+      ...(product.stockJhb > 0
+        ? [{ warehouse: { warehouse_id: 3, name: 'JHB' }, quantity_available: product.stockJhb }]
+        : []),
+      ...(product.stockCpt > 0
+        ? [{ warehouse: { warehouse_id: 1, name: 'CPT' }, quantity_available: product.stockCpt }]
+        : []),
+      ...(product.stockDbn > 0
+        ? [{ warehouse: { warehouse_id: 6, name: 'DBN' }, quantity_available: product.stockDbn }]
+        : []),
     ],
-    stock_cover: product.stockCoverDays,
+    total_stock_cover: product.stockCoverDays,
     sales_units: [
-      { dc: 'JHB', units: Math.round(product.salesUnits30d * 0.6) },
-      { dc: 'CPT', units: Math.round(product.salesUnits30d * 0.3) },
-      { dc: 'DBN', units: Math.round(product.salesUnits30d * 0.1) },
+      { warehouse_id: 3, sales_units: Math.round(product.salesUnits30d * 0.6) },
+      { warehouse_id: 1, sales_units: Math.round(product.salesUnits30d * 0.3) },
+      { warehouse_id: 6, sales_units: Math.round(product.salesUnits30d * 0.1) },
     ],
     discount: product.rrpCents > product.sellingPriceCents
-      ? Math.round(((product.rrpCents - product.sellingPriceCents) / product.rrpCents) * 100)
-      : 0,
+      ? `${Math.round(((product.rrpCents - product.sellingPriceCents) / product.rrpCents) * 100)}%`
+      : '0%',
     weight: product.weightGrams / 1000,
     length: product.lengthMm / 10,
     width: product.widthMm / 10,

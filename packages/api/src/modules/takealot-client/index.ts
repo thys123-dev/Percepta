@@ -23,33 +23,55 @@ import {
 
 // ---- Types ----
 
+/**
+ * Real Takealot Seller API offer shape (verified from /v2/offers
+ * response on 2026-04-19). Field names below intentionally match the
+ * raw API — do not rename in code; if you want camelCase, transform
+ * at the boundary in sync-offers.
+ */
 export interface TakealotOffer {
   offer_id: number;
-  tsin: number;
+  tsin_id: number;             // NOT `tsin`
   sku: string;
   barcode: string;
   title: string;
-  selling_price: number; // in Rands (VAT-inclusive)
-  rrp: number;            // in Rands
-  status: string;
+  selling_price: number;        // in Rands (VAT-inclusive)
+  rrp: number;                  // in Rands
+  status: string;               // "Buyable", "Not Buyable", "Disabled by Seller", etc.
   offer_url: string;
   product_label_number: string;
-  leadtime_days: number;
-  leadtime_stock: Array<{
-    merchant_warehouse: { warehouse_id: number; name: string };
+  image_url?: string;
+  catalogue_quality_score?: number;
+  leadtime_days: number | null;
+  leadtime_stock?: Array<{
+    merchant_warehouse: { warehouse_id: number; name: string | null };
     quantity_available: number;
   }>;
-  stock_at_takealot: Array<{
-    dc: string;
-    quantity: number;
+  stock_at_takealot?: Array<{
+    warehouse: { warehouse_id: number; name: string };  // name is "JHB"|"CPT"|"DBN"
+    quantity_available: number;                          // NOT `quantity`
   }>;
-  stock_cover: number | null;
-  sales_units: Array<{
-    dc: string;
-    units: number;
+  stock_at_takealot_total?: number;
+  stock_on_way?: Array<{
+    warehouse: { warehouse_id: number; name: string };
+    quantity_available: number;
   }>;
-  discount: number;
-  // Note: dimensions/weight may or may not be available — must validate
+  total_stock_on_way?: number;
+  stock_cover?: Array<{
+    warehouse_id: number;
+    stock_cover_days: number;
+  }>;
+  total_stock_cover?: number;                            // single-number version
+  sales_units?: Array<{
+    warehouse_id: number;
+    sales_units: number;                                 // NOT `units`
+  }>;
+  total_excess_takealot_stock?: number | null;
+  date_created?: string;
+  storage_fee_eligible?: boolean;
+  discount?: string;                                     // e.g. "20%"
+  discount_shown?: boolean;
+  // Optional extended fields some accounts return
   weight?: number;
   length?: number;
   width?: number;
@@ -276,17 +298,26 @@ export class TakealotClient {
   }
 
   /**
-   * Get total number of offers.
+   * Get total number of offers via the cheap /v2/offers/count endpoint.
+   * The real Takealot API returns the count under different field names
+   * across accounts ({total}, {total_results}, etc.), so we accept any
+   * of them and fall back to NaN — the caller MUST handle that.
    */
   async getOfferCount(): Promise<number> {
-    const result = await this.request<{ total: number }>('GET', '/v2/offers/count');
-    return result.total;
+    const result = await this.request<Record<string, unknown>>('GET', '/v2/offers/count');
+    const candidate =
+      (result.total as number | undefined) ??
+      (result.total_results as number | undefined) ??
+      (result.count as number | undefined);
+    return typeof candidate === 'number' ? candidate : NaN;
   }
 
   /**
-   * Fetch a single page of offers.
+   * Fetch a single page of offers. Pages are 1-indexed at Takealot's end
+   * — passing 0 silently coerces to 1 in the response, which would cause
+   * the first page to be fetched twice. Always pass page >= 1.
    */
-  async getOffers(page: number = 0): Promise<TakealotPaginatedResponse<TakealotOffer>> {
+  async getOffers(page: number = 1): Promise<TakealotPaginatedResponse<TakealotOffer>> {
     return this.request<TakealotPaginatedResponse<TakealotOffer>>(
       'GET',
       '/v2/offers',
@@ -303,15 +334,27 @@ export class TakealotClient {
    * Fetch ALL offers with auto-pagination.
    * Yields offers page by page for memory efficiency.
    * Emits progress callbacks.
+   *
+   * Strategy: skip the /v2/offers/count endpoint entirely (it returns
+   * inconsistent shapes across accounts). Read the first page, take
+   * `total_results` from the envelope, and iterate from there.
    */
   async *fetchAllOffers(
     onProgress?: (completed: number, total: number) => void
   ): AsyncGenerator<TakealotOffer[], void, unknown> {
-    const totalCount = await this.getOfferCount();
-    const totalPages = Math.ceil(totalCount / OFFERS_PER_PAGE);
-    let completed = 0;
+    // Page 1: gives us the total count AND the first batch of offers.
+    const firstPage = await this.getOffers(1);
+    const totalCount = firstPage.total_results ?? 0;
+    const totalPages = totalCount > 0 ? Math.ceil(totalCount / OFFERS_PER_PAGE) : 0;
 
-    for (let page = 0; page < totalPages; page++) {
+    let completed = 0;
+    const firstOffers = firstPage.offers ?? [];
+    completed += firstOffers.length;
+    if (onProgress) onProgress(completed, totalCount);
+    if (firstOffers.length > 0) yield firstOffers;
+
+    // Pages 2..N
+    for (let page = 2; page <= totalPages; page++) {
       const response = await this.getOffers(page);
       const offers = response.offers ?? [];
       completed += offers.length;
