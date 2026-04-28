@@ -106,11 +106,12 @@ async function upsertOffersBatch(sellerId: string, offers: TakealotOffer[]): Pro
   if (offers.length === 0) return;
 
   const rows = offers.map((offer) => {
-    // Derive dimensions
-    const weightGrams = offer.weight ? offer.weight * 1000 : null; // API returns kg
-    const lengthMm = offer.length ? offer.length * 10 : null;      // API returns cm
-    const widthMm = offer.width ? offer.width * 10 : null;
-    const heightMm = offer.height ? offer.height * 10 : null;
+    // Derive dimensions. Round to int because all the *_mm/*_grams columns
+    // are integer types — Takealot returns kg/cm as decimals.
+    const weightGrams = offer.weight ? Math.round(offer.weight * 1000) : null;
+    const lengthMm = offer.length ? Math.round(offer.length * 10) : null;
+    const widthMm = offer.width ? Math.round(offer.width * 10) : null;
+    const heightMm = offer.height ? Math.round(offer.height * 10) : null;
 
     // Calculate volume
     const volumeCm3 =
@@ -169,9 +170,14 @@ async function upsertOffersBatch(sellerId: string, offers: TakealotOffer[]): Pro
       stockJhb,
       stockCpt,
       stockDbn,
-      // total_stock_cover is a single number across all DCs in the new shape;
-      // it falls back to null (not 0) so "no data" stays distinguishable from "0 days cover".
-      stockCoverDays: typeof offer.total_stock_cover === 'number' ? offer.total_stock_cover : null,
+      // total_stock_cover is a single number across all DCs in the new shape.
+      // Takealot returns it as a decimal (e.g. 93.333…) but our column is
+      // INTEGER, so round before storing. Falls back to null (not 0) so
+      // "no data" stays distinguishable from "0 days cover".
+      stockCoverDays:
+        typeof offer.total_stock_cover === 'number' && Number.isFinite(offer.total_stock_cover)
+          ? Math.round(offer.total_stock_cover)
+          : null,
       salesUnits30d,
       leadtimeDays: offer.leadtime_days ?? 0,
       lastSyncedAt: new Date(),
