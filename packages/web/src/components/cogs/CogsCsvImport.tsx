@@ -30,7 +30,9 @@ import { formatCurrency } from '../../utils/format.js';
 // =============================================================================
 
 interface ParsedRow {
-  offerId: number;
+  /** Either offerId or sku (or both) must be set — backend uses one to look up the offer. */
+  offerId?: number;
+  sku?: string;
   cogsCents: number;
   inboundCostCents: number;
 }
@@ -58,6 +60,7 @@ const normaliseHeader = (h: unknown) =>
  * (e.g. "cogs_rands"). Both must work.
  */
 const OFFER_ID_ALIASES = new Set(['offer_id', 'offerid']);
+const SKU_ALIASES = new Set(['sku', 'product_code', 'merchant_sku']);
 const COGS_ALIASES = new Set([
   'cogs_rands', 'cogs_r', 'cogs', 'your_cost_cogs_r', 'your_cost', 'unit_cost', 'cost',
 ]);
@@ -75,12 +78,14 @@ const toFloat = (v: unknown): number => {
 /**
  * Find which row in the file is the actual header row. The xlsx template
  * has a banner row at index 0 and the real headers at index 1, so we
- * scan the first few rows looking for one that contains both an offer_id
- * and a cogs column. Returns -1 if no match is found.
+ * scan the first few rows looking for one that contains a COGS column
+ * AND at least one identifier (offer_id or sku). Returns null if no
+ * match is found.
  */
 function findHeaderRow(rawRows: unknown[][]): {
   rowIndex: number;
   offerIdIdx: number;
+  skuIdx: number;
   cogsIdx: number;
   inboundIdx: number;
 } | null {
@@ -88,10 +93,12 @@ function findHeaderRow(rawRows: unknown[][]): {
   for (let i = 0; i < limit; i++) {
     const cells = (rawRows[i] as unknown[]).map(normaliseHeader);
     const offerIdIdx = cells.findIndex((h) => OFFER_ID_ALIASES.has(h));
+    const skuIdx = cells.findIndex((h) => SKU_ALIASES.has(h));
     const cogsIdx = cells.findIndex((h) => COGS_ALIASES.has(h));
-    if (offerIdIdx !== -1 && cogsIdx !== -1) {
+    const hasIdentifier = offerIdIdx !== -1 || skuIdx !== -1;
+    if (hasIdentifier && cogsIdx !== -1) {
       const inboundIdx = cells.findIndex((h) => INBOUND_ALIASES.has(h));
-      return { rowIndex: i, offerIdIdx, cogsIdx, inboundIdx };
+      return { rowIndex: i, offerIdIdx, skuIdx, cogsIdx, inboundIdx };
     }
   }
   return null;
@@ -115,41 +122,55 @@ function parseRows(
       errors: [{
         row: 0,
         message:
-          'Could not find required columns. Expected an "Offer ID" column and a COGS column ' +
-          '(e.g. "★ Your Cost / COGS (R)" or "cogs_rands"). Please use the downloaded template.',
+          'Could not find required columns. Expected an "Offer ID" or "SKU" column ' +
+          'and a COGS column (e.g. "★ Your Cost / COGS (R)" or "cogs_rands"). ' +
+          'Please use the downloaded template.',
       }],
     };
   }
 
-  const { rowIndex, offerIdIdx, cogsIdx, inboundIdx } = header;
+  const { rowIndex, offerIdIdx, skuIdx, cogsIdx, inboundIdx } = header;
   const rows: ParsedRow[] = [];
   const errors: ParseError[] = [];
 
   for (let i = rowIndex + 1; i < rawRows.length; i++) {
     const cells = rawRows[i] as unknown[];
-    const rawOfferId = cells[offerIdIdx];
+    const rawOfferId = offerIdIdx !== -1 ? cells[offerIdIdx] : '';
+    const rawSku     = skuIdx !== -1 ? cells[skuIdx] : '';
     const rawCogs    = cells[cogsIdx];
     const rawInbound = inboundIdx !== -1 ? cells[inboundIdx] : 0;
 
-    const offerId     = parseInt(String(rawOfferId ?? ''), 10);
-    const cogsRands   = toFloat(rawCogs);
+    // Skip blank COGS rows silently — common when users leave rows empty.
+    if (rawCogs == null || rawCogs === '') continue;
+
+    const offerIdStr = String(rawOfferId ?? '').trim();
+    const skuStr = String(rawSku ?? '').trim();
+    const offerId = offerIdStr ? parseInt(offerIdStr, 10) : NaN;
+    const cogsRands = toFloat(rawCogs);
     const inboundRands = toFloat(rawInbound);
 
-    if (isNaN(offerId)) {
-      errors.push({ row: i + 1, message: `Row ${i + 1}: invalid offer_id "${rawOfferId}"` });
+    const hasValidOfferId = !isNaN(offerId);
+    const hasValidSku = skuStr.length > 0;
+
+    if (!hasValidOfferId && !hasValidSku) {
+      errors.push({
+        row: i + 1,
+        message: `Row ${i + 1}: needs either an offer_id or a SKU to identify the product`,
+      });
       continue;
     }
-    if (rawCogs == null || rawCogs === '') continue; // blank COGS rows skipped silently
     if (isNaN(cogsRands) || cogsRands < 0) {
       errors.push({ row: i + 1, message: `Row ${i + 1}: invalid cogs_rands "${rawCogs}"` });
       continue;
     }
 
-    rows.push({
-      offerId,
-      cogsCents:        Math.round(cogsRands * 100),
+    const parsed: ParsedRow = {
+      cogsCents: Math.round(cogsRands * 100),
       inboundCostCents: isNaN(inboundRands) ? 0 : Math.round(inboundRands * 100),
-    });
+    };
+    if (hasValidOfferId) parsed.offerId = offerId;
+    if (hasValidSku) parsed.sku = skuStr;
+    rows.push(parsed);
   }
 
   return { rows, errors };
@@ -473,16 +494,16 @@ export function CogsCsvImport() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {previewData.preview.map((row: CsvPreviewItem) => (
+                  {previewData.preview.map((row: CsvPreviewItem, idx: number) => (
                     <tr
-                      key={row.offerId}
+                      key={row.offerId ?? row.sku ?? `row-${idx}`}
                       className={row.matched ? '' : 'bg-red-50/50'}
                     >
                       <td className="px-4 py-2">
                         {row.matched ? (
                           <div>
                             <div className="truncate font-medium text-gray-800 max-w-[200px]">
-                              {row.title ?? `#${row.offerId}`}
+                              {row.title ?? (row.offerId ? `#${row.offerId}` : (row.sku ?? '—'))}
                             </div>
                             {row.sku && (
                               <div className="text-xs text-gray-400">{row.sku}</div>
@@ -490,7 +511,11 @@ export function CogsCsvImport() {
                           </div>
                         ) : (
                           <span className="text-xs text-gray-400">
-                            Offer ID {row.offerId} (not found)
+                            {row.offerId
+                              ? `Offer ID ${row.offerId} (not found)`
+                              : row.sku
+                                ? `SKU "${row.sku}" (not found)`
+                                : 'Unknown row (not found)'}
                           </span>
                         )}
                       </td>

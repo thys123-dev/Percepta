@@ -51,7 +51,7 @@ export interface CogsRow {
 }
 
 export interface CsvPreviewItem {
-  offerId: number;
+  offerId: number | null;
   title: string | null;
   sku: string | null;
   cogsCents: number;
@@ -62,7 +62,12 @@ export interface CsvPreviewItem {
 export interface CsvImportPayload {
   mode: 'preview' | 'commit';
   rows: {
-    offerId: number;
+    /**
+     * Either offerId or sku (or both) must be provided. The backend will
+     * try offerId first, then fall back to a (sellerId, sku) lookup.
+     */
+    offerId?: number;
+    sku?: string;
     cogsCents: number;
     inboundCostCents?: number;
   }[];

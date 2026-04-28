@@ -38,10 +38,14 @@ const cogsImportSchema = z.object({
   mode: z.enum(['preview', 'commit']),
   rows: z.array(
     z.object({
-      offerId: z.number().int(),
+      offerId: z.number().int().optional(),
+      sku: z.string().min(1).max(255).optional(),
       cogsCents: z.number().int().min(0),
       inboundCostCents: z.number().int().min(0).default(0),
-    })
+    }).refine(
+      (row) => row.offerId !== undefined || row.sku !== undefined,
+      { message: 'Each row must include either offerId or sku' }
+    )
   ).min(1).max(500),
 });
 
@@ -423,33 +427,77 @@ export async function sellerRoutes(server: FastifyInstance) {
     const { sellerId } = request.user as { sellerId: string };
     const { mode, rows } = cogsImportSchema.parse(request.body);
 
-    const offerIds = rows.map((r) => r.offerId);
+    // Build lookup keys for matching: try offerId first, then sku.
+    const offerIds = Array.from(
+      new Set(rows.map((r) => r.offerId).filter((v): v is number => typeof v === 'number'))
+    );
+    const skus = Array.from(
+      new Set(rows.map((r) => r.sku).filter((v): v is string => typeof v === 'string' && v.length > 0))
+    );
 
-    // Resolve which offer IDs belong to this seller
-    const existingOffers = await db
-      .select({
-        offerId: schema.offers.offerId,
-        title: schema.offers.title,
-        sku: schema.offers.sku,
-      })
-      .from(schema.offers)
-      .where(
-        and(
-          eq(schema.offers.sellerId, sellerId),
-          inArray(schema.offers.offerId, offerIds)
-        )
-      );
+    // Pre-fetch matching offers in TWO queries: one by offer_id, one by sku.
+    // Both are scoped to this seller so cross-seller SKU collisions are
+    // impossible.
+    const [byOfferId, bySku] = await Promise.all([
+      offerIds.length > 0
+        ? db
+            .select({
+              offerId: schema.offers.offerId,
+              title: schema.offers.title,
+              sku: schema.offers.sku,
+            })
+            .from(schema.offers)
+            .where(
+              and(
+                eq(schema.offers.sellerId, sellerId),
+                inArray(schema.offers.offerId, offerIds)
+              )
+            )
+        : Promise.resolve([] as { offerId: number; title: string | null; sku: string | null }[]),
+      skus.length > 0
+        ? db
+            .select({
+              offerId: schema.offers.offerId,
+              title: schema.offers.title,
+              sku: schema.offers.sku,
+            })
+            .from(schema.offers)
+            .where(
+              and(
+                eq(schema.offers.sellerId, sellerId),
+                inArray(schema.offers.sku, skus)
+              )
+            )
+        : Promise.resolve([] as { offerId: number; title: string | null; sku: string | null }[]),
+    ]);
 
-    const existingMap = new Map(existingOffers.map((o) => [o.offerId, o]));
+    const offerIdMap = new Map(byOfferId.map((o) => [o.offerId, o]));
+    const skuMap = new Map<string, { offerId: number; title: string | null; sku: string | null }>();
+    for (const o of bySku) {
+      if (o.sku) skuMap.set(o.sku, o);
+    }
+
+    /** Resolve a row to its matching offer (offerId wins, sku fallback). */
+    const resolveMatch = (row: { offerId?: number; sku?: string }) => {
+      if (row.offerId !== undefined) {
+        const m = offerIdMap.get(row.offerId);
+        if (m) return m;
+      }
+      if (row.sku) {
+        const m = skuMap.get(row.sku);
+        if (m) return m;
+      }
+      return null;
+    };
 
     // ── Preview mode: return matched/unmatched list, write nothing ──
     if (mode === 'preview') {
       const preview = rows.map((row) => {
-        const match = existingMap.get(row.offerId);
+        const match = resolveMatch(row);
         return {
-          offerId: row.offerId,
+          offerId: match?.offerId ?? row.offerId ?? null,
           title: match?.title ?? null,
-          sku: match?.sku ?? null,
+          sku: match?.sku ?? row.sku ?? null,
           cogsCents: row.cogsCents,
           inboundCostCents: row.inboundCostCents ?? 0,
           matched: !!match,
@@ -465,10 +513,22 @@ export async function sellerRoutes(server: FastifyInstance) {
     }
 
     // ── Commit mode: write updates + queue profit recalculation ──
-    const matchedRows = rows.filter((r) => existingMap.has(r.offerId));
+    // De-duplicate by resolved offerId so the same offer doesn't get
+    // multiple conflicting writes if a user lists it under both offer_id
+    // and sku.
     const updatedOfferIds: number[] = [];
+    const seen = new Set<number>();
+    let unmatched = 0;
 
-    for (const row of matchedRows) {
+    for (const row of rows) {
+      const match = resolveMatch(row);
+      if (!match) {
+        unmatched++;
+        continue;
+      }
+      if (seen.has(match.offerId)) continue;
+      seen.add(match.offerId);
+
       const [updated] = await db
         .update(schema.offers)
         .set({
@@ -480,7 +540,7 @@ export async function sellerRoutes(server: FastifyInstance) {
         .where(
           and(
             eq(schema.offers.sellerId, sellerId),
-            eq(schema.offers.offerId, row.offerId)
+            eq(schema.offers.offerId, match.offerId)
           )
         )
         .returning({ offerId: schema.offers.offerId });
@@ -511,7 +571,7 @@ export async function sellerRoutes(server: FastifyInstance) {
     return {
       mode: 'commit',
       updated: updatedOfferIds.length,
-      unmatched: rows.length - matchedRows.length,
+      unmatched,
     };
   });
 
