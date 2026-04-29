@@ -389,7 +389,12 @@ export async function sellerRoutes(server: FastifyInstance) {
         fgColor: { argb: i % 2 === 0 ? 'FFFAFAFA' : 'FFFFFFFF' },
       };
 
-      const setCell = (col: string, value: ExcelJS.CellValue, isEditable: boolean) => {
+      const setCell = (
+        col: string,
+        value: ExcelJS.CellValue,
+        isEditable: boolean,
+        numFmt?: string,
+      ) => {
         const cell = sheet.getCell(`${col}${rowNum}`);
         cell.value = value;
         cell.border = ALL_BORDERS;
@@ -397,12 +402,16 @@ export async function sellerRoutes(server: FastifyInstance) {
         cell.font = { size: 10, color: { argb: isEditable ? 'FF000000' : 'FF555555' } };
         cell.alignment = { vertical: 'middle' };
         if (typeof value === 'number') {
-          cell.numFmt = '#,##0.00';
+          // Default to currency-style two-decimal formatting; allow caller to
+          // override (e.g. plain integers for offer IDs).
+          cell.numFmt = numFmt ?? '#,##0.00';
           cell.alignment = { vertical: 'middle', horizontal: 'right' };
         }
       };
 
-      setCell('A', o.offerId,                                                    false);
+      // Offer ID: plain integer, no thousand separator, no decimals — looks
+      // like '225357430' instead of '225 357 430,00' in EU/ZA locales.
+      setCell('A', o.offerId,                                                    false, '0');
       setCell('B', o.sku ?? '',                                                   false);
       setCell('C', o.title ?? '',                                                 false);
       setCell('D', Number(((o.sellingPriceCents ?? 0) / 100).toFixed(2)),        false);
