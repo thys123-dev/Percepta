@@ -14,6 +14,7 @@ import {
 import { clsx } from 'clsx';
 import { useRealtimeUpdates } from '../../hooks/useRealtimeUpdates.js';
 import { AlertBell } from '../alerts/AlertBell.js';
+import { SyncProgressBanner } from './SyncProgressBanner.js';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -120,6 +121,10 @@ export function DashboardLayout() {
             </button>
           </div>
         </header>
+
+        {/* Global sync banner — shows whenever a sync job is running, so
+            users don't think the empty dashboard is broken. */}
+        <SyncProgressBanner />
 
         {/* Page content — extra bottom padding on mobile to clear the fixed bottom nav */}
         <main className="flex-1 p-4 pb-20 sm:p-6 lg:pb-6">
