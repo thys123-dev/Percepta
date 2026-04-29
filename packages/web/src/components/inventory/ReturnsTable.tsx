@@ -48,15 +48,35 @@ const REASON_BADGE_COLOURS: Record<string, string> = {
 
 function StockOutcomeDot({ outcome }: { outcome: 'sellable' | 'removal_order' | null }) {
   if (!outcome) return null;
-  const colour = outcome === 'sellable' ? 'bg-green-500' : 'bg-gray-400';
+  const colour = outcome === 'sellable' ? 'bg-green-500' : 'bg-amber-500';
   const label =
     outcome === 'sellable'
       ? 'Returned to sellable stock'
-      : 'Sent for removal';
+      : 'Removal order — awaiting collection at DC';
   return (
     <span className="inline-flex items-center" title={label}>
       <span className={clsx('h-2 w-2 rounded-full', colour)} />
     </span>
+  );
+}
+
+function StockOutcomeLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+      <span className="font-medium text-gray-700">Stock outcome:</span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2 w-2 rounded-full bg-green-500" />
+        Sellable — back in your inventory
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2 w-2 rounded-full bg-amber-500" />
+        Removal — awaiting collection at DC
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2 w-2 rounded-full border border-gray-300" />
+        No outcome yet (in transit or no Returns Export imported)
+      </span>
+    </div>
   );
 }
 
@@ -149,6 +169,13 @@ export function ReturnsTable() {
         </div>
       </div>
 
+      {/* Stock outcome legend — only on Reconciled view when we have Returns Export data */}
+      {!isPendingView && anyEnrichment && (
+        <div className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 shadow-sm">
+          <StockOutcomeLegend />
+        </div>
+      )}
+
       {/* Pending view explainer */}
       {isPendingView && (
         <div className="flex flex-col items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:flex-row sm:items-center">
@@ -187,7 +214,12 @@ export function ReturnsTable() {
                 {anyEnrichment && !isPendingView && (
                   <th className="px-4 py-3">Reason</th>
                 )}
-                <th className="hidden px-4 py-3 sm:table-cell">Shipped</th>
+                <th
+                  className="hidden px-4 py-3 sm:table-cell"
+                  title="Date the unit was added back to your sellable stock at Takealot. For removal orders this is blank — the unit isn't going back into stock."
+                >
+                  {isPendingView ? 'Shipped' : 'Stock In'}
+                </th>
               </tr>
             </thead>
 
@@ -291,7 +323,23 @@ export function ReturnsTable() {
                         )}
 
                         <td className="hidden px-4 py-3 text-gray-600 sm:table-cell">
-                          {formatDate(row.dateAddedToStock ?? row.dateShippedToCustomer)}
+                          {isPendingView ? (
+                            // Pending view has no return record yet — show original ship date.
+                            formatDate(row.dateShippedToCustomer)
+                          ) : row.stockOutcome === 'sellable' && row.dateAddedToStock ? (
+                            formatDate(row.dateAddedToStock)
+                          ) : row.stockOutcome === 'removal_order' ? (
+                            <div className="flex flex-col">
+                              <span className="text-gray-400">—</span>
+                              {row.dateReadyToCollect && (
+                                <span className="text-[10px] text-amber-600">
+                                  Ready: {formatDate(row.dateReadyToCollect)}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
                         </td>
                       </tr>
                     ))}
