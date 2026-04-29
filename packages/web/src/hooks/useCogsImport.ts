@@ -71,6 +71,7 @@ export interface CsvPreviewItem {
 
 export interface CsvImportPayload {
   mode: 'preview' | 'commit';
+  fileName?: string;
   rows: {
     /**
      * Either offerId or sku (or both) must be provided. The backend will
@@ -153,7 +154,34 @@ export function useCsvImport() {
         queryClient.invalidateQueries({ queryKey: ['products'] });
         queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
         queryClient.invalidateQueries({ queryKey: ['fee-summary'] });
+        queryClient.invalidateQueries({ queryKey: ['cogs-import-history'] });
       }
     },
+  });
+}
+
+// =============================================================================
+// useCogsImportHistory — GET /sellers/cogs/imports
+// =============================================================================
+
+export interface CogsImportRecord {
+  id: string;
+  fileName: string;
+  rowCount: number;
+  matchedCount: number;
+  unmatchedCount: number;
+  status: string;
+  errorMessage: string | null;
+  createdAt: string;
+}
+
+export function useCogsImportHistory() {
+  return useQuery({
+    queryKey: ['cogs-import-history'],
+    queryFn: async () => {
+      const res = await api.get('/sellers/cogs/imports');
+      return res.data.imports as CogsImportRecord[];
+    },
+    staleTime: 60_000,
   });
 }

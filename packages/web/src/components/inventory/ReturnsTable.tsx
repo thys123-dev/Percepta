@@ -326,8 +326,22 @@ export function ReturnsTable() {
                           {isPendingView ? (
                             // Pending view has no return record yet — show original ship date.
                             formatDate(row.dateShippedToCustomer)
-                          ) : row.stockOutcome === 'sellable' && row.dateAddedToStock ? (
-                            formatDate(row.dateAddedToStock)
+                          ) : row.stockOutcome === 'sellable' ? (
+                            row.dateAddedToStock ? (
+                              formatDate(row.dateAddedToStock)
+                            ) : /cancellation/i.test(row.returnReason ?? '') ? (
+                              // Customer Cancellation: unit never physically left the DC.
+                              <div className="flex flex-col">
+                                <span className="text-gray-400">—</span>
+                                <span className="text-[10px] text-gray-500">Never shipped</span>
+                              </div>
+                            ) : (
+                              // Sellable but no date yet — Takealot is still processing the return.
+                              <div className="flex flex-col">
+                                <span className="text-gray-400">—</span>
+                                <span className="text-[10px] text-gray-500">Awaiting receipt</span>
+                              </div>
+                            )
                           ) : row.stockOutcome === 'removal_order' ? (
                             <div className="flex flex-col">
                               <span className="text-gray-400">—</span>

@@ -44,6 +44,7 @@ const offerListQuerySchema = z.object({
 
 const cogsImportSchema = z.object({
   mode: z.enum(['preview', 'commit']),
+  fileName: z.string().max(255).optional(),
   rows: z.array(
     z.object({
       offerId: z.number().int().optional(),
@@ -599,7 +600,7 @@ export async function sellerRoutes(server: FastifyInstance) {
   // ---------------------------------------------------------------------------
   server.post('/cogs/import', { preHandler: [authenticate] }, async (request) => {
     const { sellerId } = request.user as { sellerId: string };
-    const { mode, rows } = cogsImportSchema.parse(request.body);
+    const { mode, rows, fileName } = cogsImportSchema.parse(request.body);
 
     // Build lookup keys for matching: try offerId first, then sku.
     const offerIds = Array.from(
@@ -766,12 +767,45 @@ export async function sellerRoutes(server: FastifyInstance) {
       }
     }
 
+    // Record this import in the audit ledger so the UI can show
+    // "last uploaded" feedback. We record *after* the writes so a failed
+    // commit doesn't leave a misleading "complete" entry.
+    try {
+      await db.insert(schema.cogsImports).values({
+        sellerId,
+        fileName: fileName ?? 'cogs_import.csv',
+        rowCount: rows.length,
+        matchedCount: updatedOfferIds.length,
+        unmatchedCount: unmatchedRows.length,
+        status: 'complete',
+      });
+    } catch (err) {
+      // Audit ledger is best-effort — don't fail the import if it can't be recorded.
+      request.log.warn({ err }, 'Failed to record cogs_imports row');
+    }
+
     return {
       mode: 'commit',
       updated: updatedOfferIds.length,
       unmatched: unmatchedRows.length,
       unmatchedRows,
     };
+  });
+
+  // ---------------------------------------------------------------------------
+  // GET /api/sellers/cogs/imports — List past COGS imports (audit ledger)
+  // ---------------------------------------------------------------------------
+  server.get('/cogs/imports', { preHandler: [authenticate] }, async (request) => {
+    const { sellerId } = request.user as { sellerId: string };
+
+    const imports = await db
+      .select()
+      .from(schema.cogsImports)
+      .where(eq(schema.cogsImports.sellerId, sellerId))
+      .orderBy(desc(schema.cogsImports.createdAt))
+      .limit(20);
+
+    return { imports };
   });
 
   // PATCH /api/sellers/profile — Update seller profile settings

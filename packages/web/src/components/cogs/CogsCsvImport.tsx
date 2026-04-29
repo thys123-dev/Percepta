@@ -21,9 +21,14 @@ import {
   FileSpreadsheet,
   ChevronRight,
 } from 'lucide-react';
-import { useCsvImport, type CsvPreviewItem } from '../../hooks/useCogsImport.js';
+import {
+  useCsvImport,
+  useCogsImportHistory,
+  type CsvPreviewItem,
+} from '../../hooks/useCogsImport.js';
 import { apiClient } from '../../services/api.js';
 import { formatCurrency } from '../../utils/format.js';
+import { LastUploadBanner } from '../fees/LastUploadBanner.js';
 
 // =============================================================================
 // Parsers (CSV and xlsx — both produce the same ParsedRow[])
@@ -227,6 +232,8 @@ export function CogsCsvImport() {
   } | null>(null);
 
   const csvImport = useCsvImport();
+  const { data: history, isLoading: historyLoading } = useCogsImportHistory();
+  const latestImport = history?.[0] ?? null;
 
   const previewData = csvImport.data?.mode === 'preview' ? csvImport.data : null;
 
@@ -281,7 +288,7 @@ export function CogsCsvImport() {
   const handleCommit = () => {
     if (!parsedRows.length) return;
     csvImport.mutate(
-      { mode: 'commit', rows: parsedRows },
+      { mode: 'commit', rows: parsedRows, fileName: fileName ?? undefined },
       {
         onSuccess: (data) => {
           if (data.mode === 'commit') {
@@ -418,6 +425,25 @@ export function CogsCsvImport() {
 
   return (
     <div className="space-y-5">
+      {/* Last upload status */}
+      <LastUploadBanner
+        label="COGS"
+        isLoading={historyLoading}
+        latest={
+          latestImport
+            ? {
+                fileName: latestImport.fileName,
+                status: latestImport.status,
+                createdAt: latestImport.createdAt,
+                primaryCount: latestImport.matchedCount,
+                secondaryCount: latestImport.unmatchedCount,
+              }
+            : null
+        }
+        primaryCountLabel="products updated"
+        secondaryCountLabel="unmatched"
+      />
+
       {/* Download template banner */}
       <div className="flex items-start gap-4 rounded-xl border border-brand-200 bg-brand-50 p-4">
         <FileText className="mt-0.5 h-5 w-5 flex-shrink-0 text-brand-600" />

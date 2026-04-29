@@ -459,6 +459,31 @@ export const sellerCosts = pgTable(
 );
 
 // =============================================================================
+// cogs_imports — Tracks COGS CSV/XLSX uploads (audit ledger only — actual
+// cogs values are written directly to offers.cogsCents)
+// =============================================================================
+
+export const cogsImports = pgTable(
+  'cogs_imports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sellerId: uuid('seller_id')
+      .notNull()
+      .references(() => sellers.id, { onDelete: 'cascade' }),
+    fileName: varchar('file_name', { length: 255 }).notNull(),
+    rowCount: integer('row_count').notNull(),
+    matchedCount: integer('matched_count').default(0),
+    unmatchedCount: integer('unmatched_count').default(0),
+    status: varchar('status', { length: 20 }).default('pending'),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    index('cogs_imports_seller_idx').on(table.sellerId),
+  ]
+);
+
+// =============================================================================
 // takealot_return_imports — Tracks Takealot Returns Export XLSX uploads
 // =============================================================================
 
