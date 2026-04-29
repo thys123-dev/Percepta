@@ -16,6 +16,7 @@ import {
 import { formatCurrency } from '../../utils/format.js';
 import { apiClient } from '../../services/api.js';
 import { clsx } from 'clsx';
+import { StatusDot } from '../common/StatusDot.js';
 
 // =============================================================================
 // Cover-days badge
@@ -56,10 +57,21 @@ const SORT_OPTIONS: { key: StockSortKey; label: string }[] = [
 ];
 
 const STATUS_OPTIONS: { key: StockStatusFilter; label: string }[] = [
-  { key: 'active', label: 'Active' },
-  { key: 'disabled', label: 'Disabled' },
-  { key: 'all', label: 'All' },
+  { key: 'active',      label: 'Active' },
+  { key: 'buyable',     label: 'Buyable' },
+  { key: 'not_buyable', label: 'Not Buyable' },
+  { key: 'disabled',    label: 'Disabled' },
+  { key: 'all',         label: 'All' },
 ];
+
+/** Human label for the count badge, e.g. '(38 buyable)'. */
+const STATUS_COUNT_LABEL: Record<StockStatusFilter, string> = {
+  active:      'active',
+  buyable:     'buyable',
+  not_buyable: 'not buyable',
+  disabled:    'disabled',
+  all:         'total',
+};
 
 // =============================================================================
 // StockTable
@@ -152,7 +164,7 @@ export function StockTable() {
         ))}
         {data?.pagination && (
           <span className="ml-2 text-xs text-gray-400">
-            ({data.pagination.totalItems.toLocaleString()} {statusFilter === 'all' ? 'total' : statusFilter})
+            ({data.pagination.totalItems.toLocaleString()} {STATUS_COUNT_LABEL[statusFilter]})
           </span>
         )}
 
@@ -258,9 +270,13 @@ export function StockTable() {
                           ? `No products matching "${debouncedSearch}"`
                           : statusFilter === 'active'
                             ? 'No active listings on Takealot. Try the "Disabled" or "All" filter to see paused products.'
-                            : statusFilter === 'disabled'
-                              ? 'No disabled listings.'
-                              : 'No products found. Stock data will appear after the next sync.'}
+                            : statusFilter === 'buyable'
+                              ? 'No Buyable listings right now. Try "Not Buyable" or "Active" to see listings without stock.'
+                              : statusFilter === 'not_buyable'
+                                ? 'No products in the "Not Buyable" state. That\'s a good thing — every active listing has stock.'
+                                : statusFilter === 'disabled'
+                                  ? 'No disabled listings.'
+                                  : 'No products found. Stock data will appear after the next sync.'}
                       </td>
                     </tr>
                   )
@@ -276,8 +292,11 @@ export function StockTable() {
                           {/* Title + SKU */}
                           <td className="px-4 py-3">
                             <div className="max-w-[260px]">
-                              <div className="truncate font-medium text-gray-800">
-                                {row.title}
+                              <div className="flex items-center gap-2">
+                                <StatusDot status={row.status} />
+                                <span className="truncate font-medium text-gray-800">
+                                  {row.title}
+                                </span>
                               </div>
                               <div className="text-xs text-gray-400">
                                 {row.sku ?? `ID: ${row.offerId}`}

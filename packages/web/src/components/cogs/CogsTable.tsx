@@ -8,8 +8,15 @@
 
 import { useState, useCallback } from 'react';
 import { Search, Save, Check, AlertCircle, Loader2, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
-import { useOfferList, useUpdateCogs, type OfferForCogs } from '../../hooks/useCogsImport.js';
+import { clsx } from 'clsx';
+import {
+  useOfferList,
+  useUpdateCogs,
+  type OfferForCogs,
+  type CogsStatusFilter,
+} from '../../hooks/useCogsImport.js';
 import { formatCurrency } from '../../utils/format.js';
+import { StatusDot } from '../common/StatusDot.js';
 
 // =============================================================================
 // Types
@@ -28,11 +35,28 @@ interface RowEdit {
 // CogsTable
 // =============================================================================
 
+const STATUS_OPTIONS: { key: CogsStatusFilter; label: string }[] = [
+  { key: 'active',      label: 'Active' },
+  { key: 'buyable',     label: 'Buyable' },
+  { key: 'not_buyable', label: 'Not Buyable' },
+  { key: 'disabled',    label: 'Disabled' },
+  { key: 'all',         label: 'All' },
+];
+
+const STATUS_COUNT_LABEL: Record<CogsStatusFilter, string> = {
+  active:      'active',
+  buyable:     'buyable',
+  not_buyable: 'not buyable',
+  disabled:    'disabled',
+  all:         'total',
+};
+
 export function CogsTable() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<'title' | 'sales' | 'cogs'>('cogs');
+  const [statusFilter, setStatusFilter] = useState<CogsStatusFilter>('active');
 
   // Local edit state: offerId → RowEdit
   const [edits, setEdits] = useState<Record<number, RowEdit>>({});
@@ -49,11 +73,17 @@ export function CogsTable() {
     []
   );
 
+  const handleStatusChange = (next: CogsStatusFilter) => {
+    setStatusFilter(next);
+    setPage(1);
+  };
+
   const { data, isLoading, isFetching } = useOfferList({
     limit: 50,
     page,
     search: debouncedSearch || undefined,
     sort,
+    statusFilter,
   });
 
   const offers = data?.data ?? [];
@@ -142,6 +172,30 @@ export function CogsTable() {
 
   return (
     <div className="space-y-4">
+      {/* Status filter row */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-gray-500">Listing status:</span>
+        {STATUS_OPTIONS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => handleStatusChange(key)}
+            className={clsx(
+              'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+              statusFilter === key
+                ? 'bg-brand-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            )}
+          >
+            {label}
+          </button>
+        ))}
+        {data?.pagination && (
+          <span className="ml-2 text-xs text-gray-400">
+            ({data.pagination.totalItems.toLocaleString()} {STATUS_COUNT_LABEL[statusFilter]})
+          </span>
+        )}
+      </div>
+
       {/* Toolbar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         {/* Search */}
@@ -228,8 +282,11 @@ export function CogsTable() {
                           {/* Title + SKU */}
                           <td className="px-4 py-3">
                             <div className="max-w-[240px]">
-                              <div className="truncate font-medium text-gray-800">
-                                {offer.title ?? `Offer #${offer.offerId}`}
+                              <div className="flex items-center gap-2">
+                                <StatusDot status={offer.status} />
+                                <span className="truncate font-medium text-gray-800">
+                                  {offer.title ?? `Offer #${offer.offerId}`}
+                                </span>
                               </div>
                               <div className="text-xs text-gray-400">
                                 {offer.sku ?? `ID: ${offer.offerId}`}

@@ -41,11 +41,13 @@ export type StockSortKey = 'title' | 'stock_cover' | 'sales_velocity' | 'total_s
 
 /**
  * Listing-status filter:
- *   active   = Buyable / Not Buyable (default — what the seller can actually sell)
- *   disabled = Disabled by Seller / Disabled by Takealot
- *   all      = no filter
+ *   active      = Buyable + Not Buyable (default — what the seller can actually sell)
+ *   buyable     = exactly status = 'Buyable'
+ *   not_buyable = exactly status = 'Not Buyable'
+ *   disabled    = Disabled by Seller / Disabled by Takealot
+ *   all         = no filter
  */
-export type StockStatusFilter = 'active' | 'disabled' | 'all';
+export type StockStatusFilter = 'active' | 'buyable' | 'not_buyable' | 'disabled' | 'all';
 
 export interface StockParams {
   search?: string;

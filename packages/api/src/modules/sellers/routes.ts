@@ -32,6 +32,14 @@ const offerListQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   search: z.string().optional(),
   sort: z.enum(['title', 'sales', 'cogs']).optional().default('title'),
+  /**
+   * Same status grouping as inventory, defaulted to 'active' so disabled
+   * SKUs stay hidden from COGS by default. The COGS UI exposes pills
+   * to switch to 'buyable' / 'not_buyable' / 'disabled' / 'all'.
+   */
+  statusFilter: z
+    .enum(['active', 'buyable', 'not_buyable', 'disabled', 'all'])
+    .default('active'),
 });
 
 const cogsImportSchema = z.object({
@@ -338,11 +346,29 @@ export async function sellerRoutes(server: FastifyInstance) {
     const params = offerListQuerySchema.parse(request.query);
     const offset = (params.page - 1) * params.limit;
 
-    // Build WHERE: seller filter + active-only + optional text search
-    const conditions: ReturnType<typeof eq>[] = [
-      eq(schema.offers.sellerId, sellerId),
-      sql`(${schema.offers.status} IS NULL OR ${schema.offers.status} NOT ILIKE '%disabled%')` as unknown as ReturnType<typeof eq>,
-    ];
+    // Build WHERE: seller filter + status filter + optional text search
+    const conditions: ReturnType<typeof eq>[] = [eq(schema.offers.sellerId, sellerId)];
+
+    // Same status grouping as inventory (see inventory/routes.ts)
+    if (params.statusFilter === 'active') {
+      conditions.push(
+        sql`(${schema.offers.status} IS NULL OR ${schema.offers.status} NOT ILIKE '%disabled%')` as unknown as ReturnType<typeof eq>
+      );
+    } else if (params.statusFilter === 'buyable') {
+      conditions.push(
+        sql`${schema.offers.status} ILIKE 'Buyable'` as unknown as ReturnType<typeof eq>
+      );
+    } else if (params.statusFilter === 'not_buyable') {
+      conditions.push(
+        sql`${schema.offers.status} ILIKE 'Not Buyable'` as unknown as ReturnType<typeof eq>
+      );
+    } else if (params.statusFilter === 'disabled') {
+      conditions.push(
+        sql`${schema.offers.status} ILIKE '%disabled%'` as unknown as ReturnType<typeof eq>
+      );
+    }
+    // 'all' adds no condition.
+
     if (params.search) {
       conditions.push(
         sql`(${schema.offers.title} ILIKE ${`%${params.search}%`} OR ${schema.offers.sku} ILIKE ${`%${params.search}%`})` as unknown as ReturnType<typeof eq>
@@ -366,6 +392,7 @@ export async function sellerRoutes(server: FastifyInstance) {
           title: schema.offers.title,
           sku: schema.offers.sku,
           category: schema.offers.category,
+          status: schema.offers.status,
           sellingPriceCents: schema.offers.sellingPriceCents,
           cogsCents: schema.offers.cogsCents,
           cogsSource: schema.offers.cogsSource,

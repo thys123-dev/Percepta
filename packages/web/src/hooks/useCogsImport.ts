@@ -23,6 +23,8 @@ export interface OfferForCogs {
   title: string | null;
   sku: string | null;
   category: string | null;
+  /** Raw Takealot status string — 'Buyable', 'Not Buyable', 'Disabled by Seller', etc. */
+  status: string | null;
   sellingPriceCents: number | null;
   cogsCents: number | null;
   cogsSource: string;
@@ -31,11 +33,15 @@ export interface OfferForCogs {
   stockCoverDays: number | null;
 }
 
+/** Same listing-status grouping as inventory — see useInventory.ts. */
+export type CogsStatusFilter = 'active' | 'buyable' | 'not_buyable' | 'disabled' | 'all';
+
 export interface OfferListParams {
   limit?: number;
   page?: number;
   search?: string;
   sort?: 'title' | 'sales' | 'cogs';
+  statusFilter?: CogsStatusFilter;
 }
 
 export interface OfferListData {
