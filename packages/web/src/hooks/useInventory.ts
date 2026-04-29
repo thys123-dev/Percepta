@@ -97,11 +97,19 @@ export interface ReturnRow {
 
 export type ReturnsSortKey = 'order_date' | 'reversal_amount' | 'product_title';
 
+/**
+ * reconciled — matched to Account Transactions CSV (has reversal amount). Default.
+ * pending    — webhook-flagged as returned but no CSV reconciliation yet.
+ * all        — either.
+ */
+export type ReturnsView = 'reconciled' | 'pending' | 'all';
+
 export interface ReturnsParams {
   sort?: ReturnsSortKey;
   order?: 'asc' | 'desc';
   limit?: number;
   page?: number;
+  view?: ReturnsView;
 }
 
 export interface ReturnsData {

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Download, Loader2 } from 'lucide-react';
 import { SalesReportUpload } from '../components/fees/SalesReportUpload';
 import { AccountTransactionUpload } from '../components/fees/AccountTransactionUpload';
@@ -11,8 +12,25 @@ import { useExportDiscrepancies } from '../hooks/useSalesReport';
 
 type Tab = 'upload' | 'acct-transactions' | 'discrepancies' | 'by-product' | 'insights' | 'history';
 
+const VALID_TABS: readonly Tab[] = [
+  'upload',
+  'acct-transactions',
+  'discrepancies',
+  'by-product',
+  'insights',
+  'history',
+];
+
 export function FeeAuditPage() {
-  const [tab, setTab] = useState<Tab>('upload');
+  const [searchParams] = useSearchParams();
+  const initialTab = (() => {
+    const requested = searchParams.get('tab');
+    return requested && (VALID_TABS as readonly string[]).includes(requested)
+      ? (requested as Tab)
+      : 'upload';
+  })();
+
+  const [tab, setTab] = useState<Tab>(initialTab);
   const exportMutation = useExportDiscrepancies();
 
   const tabs: Array<{ key: Tab; label: string }> = [

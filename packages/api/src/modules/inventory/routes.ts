@@ -9,7 +9,7 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { and, eq, or, sql, desc, asc, ilike } from 'drizzle-orm';
+import { and, eq, or, sql, desc, asc, ilike, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db, schema } from '../../db/index.js';
 import { authenticate } from '../../middleware/auth.js';
@@ -55,7 +55,17 @@ const returnsQuerySchema = z.object({
   order: z.enum(['asc', 'desc']).default('desc'),
   limit: z.coerce.number().min(1).max(200).default(50),
   page: z.coerce.number().min(1).default(1),
+  /**
+   * Returns view:
+   *   reconciled — orders with hasReversal=true (matched against Account Transactions CSV). Default.
+   *   pending    — orders with saleStatus 'Returned' / 'Return Requested' but no reversal yet (webhook-only).
+   *   all        — either of the above.
+   */
+  view: z.enum(['reconciled', 'pending', 'all']).default('reconciled'),
 });
+
+/** Takealot saleStatus values that indicate a return is in flight, regardless of financial reconciliation. */
+const PENDING_RETURN_STATUSES = ['Returned', 'Return Requested'] as const;
 
 // =============================================================================
 // Routes
@@ -229,14 +239,27 @@ export async function inventoryRoutes(server: FastifyInstance) {
     const params = returnsQuerySchema.parse(request.query);
     const offset = (params.page - 1) * params.limit;
 
-    const cacheKey = `inventory:${sellerId}:returns:${params.sort}:${params.order}:${params.page}:${params.limit}`;
+    const cacheKey = `inventory:${sellerId}:returns:${params.view}:${params.sort}:${params.order}:${params.page}:${params.limit}`;
     const cached = await cacheGet(cacheKey);
     if (cached !== null) return cached;
 
-    const where = and(
-      eq(schema.orders.sellerId, sellerId),
-      eq(schema.orders.hasReversal, true)
-    );
+    const reconciledCondition = eq(schema.orders.hasReversal, true);
+    const pendingCondition = and(
+      or(
+        eq(schema.orders.hasReversal, false),
+        sql`${schema.orders.hasReversal} IS NULL`
+      )!,
+      inArray(schema.orders.saleStatus, [...PENDING_RETURN_STATUSES])
+    )!;
+
+    const viewCondition =
+      params.view === 'reconciled'
+        ? reconciledCondition
+        : params.view === 'pending'
+          ? pendingCondition
+          : or(reconciledCondition, pendingCondition)!;
+
+    const where = and(eq(schema.orders.sellerId, sellerId), viewCondition);
 
     const sortExprMap = {
       order_date: schema.orders.orderDate,

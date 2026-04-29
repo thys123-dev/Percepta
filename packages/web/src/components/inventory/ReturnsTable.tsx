@@ -1,19 +1,22 @@
 /**
  * ReturnsTable
  *
- * Paginated table of all orders with reversals (hasReversal=true).
- * Shows order details, reversal amounts, and shipping dates.
+ * Two views:
+ *   Reconciled — orders matched against Account Transactions CSV (financial reversal known).
+ *   Pending    — orders Takealot has flagged as returned/return-requested via webhook,
+ *                but the seller hasn't yet imported the CSV that reconciles the refund amount.
  */
 
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, ArrowUpDown } from 'lucide-react';
-import { useInventoryReturns, type ReturnsSortKey } from '../../hooks/useInventory.js';
+import { Link } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, Loader2, ArrowUpDown, FileUp } from 'lucide-react';
+import {
+  useInventoryReturns,
+  type ReturnsSortKey,
+  type ReturnsView,
+} from '../../hooks/useInventory.js';
 import { formatCurrency, formatDate } from '../../utils/format.js';
 import { clsx } from 'clsx';
-
-// =============================================================================
-// Sort options
-// =============================================================================
 
 const SORT_OPTIONS: { key: ReturnsSortKey; label: string }[] = [
   { key: 'order_date', label: 'Date' },
@@ -21,14 +24,27 @@ const SORT_OPTIONS: { key: ReturnsSortKey; label: string }[] = [
   { key: 'product_title', label: 'A–Z' },
 ];
 
-// =============================================================================
-// ReturnsTable
-// =============================================================================
+const VIEW_TABS: { key: ReturnsView; label: string; hint: string }[] = [
+  { key: 'reconciled', label: 'Reconciled', hint: 'Matched to Account Transactions CSV' },
+  { key: 'pending', label: 'Pending', hint: 'Flagged by Takealot, awaiting CSV reconciliation' },
+];
+
+const IMPORT_CSV_HREF = '/dashboard/fee-audit?tab=acct-transactions';
 
 export function ReturnsTable() {
+  const [view, setView] = useState<ReturnsView>('reconciled');
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<ReturnsSortKey>('order_date');
   const [order, setOrder] = useState<'asc' | 'desc'>('desc');
+
+  const handleViewClick = (next: ReturnsView) => {
+    setView(next);
+    setPage(1);
+    if (next === 'pending' && sort === 'reversal_amount') {
+      setSort('order_date');
+      setOrder('desc');
+    }
+  };
 
   const handleSortClick = (key: ReturnsSortKey) => {
     if (sort === key) {
@@ -41,6 +57,7 @@ export function ReturnsTable() {
   };
 
   const { data, isLoading, isFetching } = useInventoryReturns({
+    view,
     sort,
     order,
     limit: 50,
@@ -49,28 +66,73 @@ export function ReturnsTable() {
 
   const rows = data?.data ?? [];
   const pagination = data?.pagination;
+  const isPendingView = view === 'pending';
 
   return (
     <div className="space-y-4">
-      {/* Sort toolbar */}
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-gray-500">Sort:</span>
-        {SORT_OPTIONS.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => handleSortClick(key)}
-            className={clsx(
-              'flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
-              sort === key
-                ? 'bg-brand-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            )}
-          >
-            {label}
-            {sort === key && <ArrowUpDown className="h-3 w-3" />}
-          </button>
-        ))}
+      {/* View tabs */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+          {VIEW_TABS.map(({ key, label, hint }) => (
+            <button
+              key={key}
+              onClick={() => handleViewClick(key)}
+              title={hint}
+              className={clsx(
+                'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                view === key
+                  ? 'bg-brand-600 text-white shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              )}
+            >
+              {label}
+              {pagination && view === key && (
+                <span className="ml-1.5 opacity-75">({pagination.totalItems.toLocaleString()})</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Sort toolbar */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">Sort:</span>
+          {SORT_OPTIONS.filter(
+            (opt) => !(isPendingView && opt.key === 'reversal_amount')
+          ).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => handleSortClick(key)}
+              className={clsx(
+                'flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
+                sort === key
+                  ? 'bg-brand-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              )}
+            >
+              {label}
+              {sort === key && <ArrowUpDown className="h-3 w-3" />}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Pending view explainer */}
+      {isPendingView && (
+        <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div>
+            <span className="font-medium">Awaiting financial reconciliation.</span>{' '}
+            Takealot has flagged these orders as returned, but no reversal amount has been booked yet.
+            Import your latest Account Transactions CSV to reconcile.
+          </div>
+          <Link
+            to={IMPORT_CSV_HREF}
+            className="flex shrink-0 items-center gap-1.5 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
+          >
+            <FileUp className="h-3.5 w-3.5" />
+            Import CSV
+          </Link>
+        </div>
+      )}
 
       {/* Table */}
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -82,7 +144,11 @@ export function ReturnsTable() {
                 <th className="px-4 py-3">Product</th>
                 <th className="px-4 py-3">Order Date</th>
                 <th className="px-4 py-3 text-right">Qty</th>
-                <th className="px-4 py-3 text-right">Reversal</th>
+                {isPendingView ? (
+                  <th className="px-4 py-3">Status</th>
+                ) : (
+                  <th className="px-4 py-3 text-right">Reversal</th>
+                )}
                 <th className="hidden px-4 py-3 sm:table-cell">Shipped</th>
               </tr>
             </thead>
@@ -101,8 +167,8 @@ export function ReturnsTable() {
                 : rows.length === 0
                   ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-10 text-center text-sm text-gray-400">
-                        No returns found. Reversed orders will appear here after importing your Account Transactions CSV.
+                      <td colSpan={6} className="px-4 py-12 text-center">
+                        <ReturnsEmptyState view={view} />
                       </td>
                     </tr>
                   )
@@ -111,12 +177,10 @@ export function ReturnsTable() {
                         key={`${row.orderId}-${idx}`}
                         className="transition-colors hover:bg-gray-50"
                       >
-                        {/* Order ID */}
                         <td className="px-4 py-3 tabular-nums text-gray-600">
                           {row.orderId}
                         </td>
 
-                        {/* Product */}
                         <td className="px-4 py-3">
                           <div className="max-w-[240px]">
                             <div className="truncate font-medium text-gray-800">
@@ -128,22 +192,33 @@ export function ReturnsTable() {
                           </div>
                         </td>
 
-                        {/* Order date */}
                         <td className="px-4 py-3 text-gray-600">
                           {formatDate(row.orderDate)}
                         </td>
 
-                        {/* Qty */}
                         <td className="px-4 py-3 text-right tabular-nums text-gray-600">
                           {row.quantity}
                         </td>
 
-                        {/* Reversal amount */}
-                        <td className="px-4 py-3 text-right tabular-nums font-medium text-red-600">
-                          {formatCurrency(row.reversalAmountCents)}
-                        </td>
+                        {isPendingView ? (
+                          <td className="px-4 py-3">
+                            <span
+                              className={clsx(
+                                'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
+                                row.saleStatus === 'Returned'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-blue-100 text-blue-800'
+                              )}
+                            >
+                              {row.saleStatus ?? '—'}
+                            </span>
+                          </td>
+                        ) : (
+                          <td className="px-4 py-3 text-right tabular-nums font-medium text-red-600">
+                            {formatCurrency(row.reversalAmountCents)}
+                          </td>
+                        )}
 
-                        {/* Shipped date */}
                         <td className="hidden px-4 py-3 text-gray-600 sm:table-cell">
                           {formatDate(row.dateShippedToCustomer)}
                         </td>
@@ -190,6 +265,36 @@ export function ReturnsTable() {
           Refreshing…
         </div>
       )}
+    </div>
+  );
+}
+
+function ReturnsEmptyState({ view }: { view: ReturnsView }) {
+  if (view === 'pending') {
+    return (
+      <div className="flex flex-col items-center gap-1 text-sm text-gray-400">
+        <span>No pending returns.</span>
+        <span className="text-xs">
+          Orders Takealot flags as <em>Returned</em> or <em>Return Requested</em> appear here in real time.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-3 text-sm text-gray-500">
+      <span>No reversed orders found yet.</span>
+      <span className="max-w-md text-xs text-gray-400">
+        Reversed orders appear here once you import your Takealot Account Transactions CSV
+        — that's where refund amounts and reversed fees are reconciled against orders.
+      </span>
+      <Link
+        to={IMPORT_CSV_HREF}
+        className="mt-1 inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-brand-700"
+      >
+        <FileUp className="h-3.5 w-3.5" />
+        Import Account Transactions
+      </Link>
     </div>
   );
 }
