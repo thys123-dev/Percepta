@@ -239,7 +239,9 @@ export async function inventoryRoutes(server: FastifyInstance) {
     const params = returnsQuerySchema.parse(request.query);
     const offset = (params.page - 1) * params.limit;
 
-    const cacheKey = `inventory:${sellerId}:returns:${params.view}:${params.sort}:${params.order}:${params.page}:${params.limit}`;
+    // Cache key prefix bumped to v2 to invalidate stale entries that lack
+    // the takealot_returns enrichment fields.
+    const cacheKey = `inventory:${sellerId}:returns:v2:${params.view}:${params.sort}:${params.order}:${params.page}:${params.limit}`;
     const cached = await cacheGet(cacheKey);
     if (cached !== null) return cached;
 
@@ -294,17 +296,85 @@ export async function inventoryRoutes(server: FastifyInstance) {
         .where(where),
     ]);
 
-    const data = rows.map((r) => ({
-      orderId: r.orderId,
-      productTitle: r.productTitle ?? 'Unknown Product',
-      sku: r.sku ?? null,
-      orderDate: r.orderDate?.toISOString() ?? null,
-      reversalAmountCents: r.reversalAmountCents ?? 0,
-      quantity: r.quantity,
-      sellingPriceCents: r.sellingPriceCents,
-      dateShippedToCustomer: r.dateShippedToCustomer?.toISOString() ?? null,
-      saleStatus: r.saleStatus ?? null,
-    }));
+    // ── Enrich with takealot_returns (return reason, customer comment, stock
+    //    outcome, removal-order tracking). One LEFT JOIN-equivalent fetch:
+    //    grab every return row for the orderIds on this page, then pick the
+    //    latest by return_date per order in JS. ──
+    const pageOrderIds = rows.map((r) => r.orderId).filter((id): id is number => id != null);
+    let returnsByOrderId = new Map<
+      number,
+      {
+        rrn: string;
+        returnReason: string | null;
+        customerComment: string | null;
+        stockOutcome: string | null;
+        removalOrderNumber: string | null;
+        dateReadyToCollect: Date | null;
+        dateAddedToStock: Date | null;
+        returnDate: Date;
+      }
+    >();
+    if (pageOrderIds.length > 0) {
+      const returnRows = await db
+        .select({
+          orderId: schema.takealotReturns.orderId,
+          rrn: schema.takealotReturns.rrn,
+          returnReason: schema.takealotReturns.returnReason,
+          customerComment: schema.takealotReturns.customerComment,
+          stockOutcome: schema.takealotReturns.stockOutcome,
+          removalOrderNumber: schema.takealotReturns.removalOrderNumber,
+          dateReadyToCollect: schema.takealotReturns.dateReadyToCollect,
+          dateAddedToStock: schema.takealotReturns.dateAddedToStock,
+          returnDate: schema.takealotReturns.returnDate,
+        })
+        .from(schema.takealotReturns)
+        .where(
+          and(
+            eq(schema.takealotReturns.sellerId, sellerId),
+            inArray(schema.takealotReturns.orderId, pageOrderIds)
+          )
+        );
+
+      for (const r of returnRows) {
+        if (r.orderId == null) continue;
+        const existing = returnsByOrderId.get(r.orderId);
+        if (!existing || r.returnDate.getTime() > existing.returnDate.getTime()) {
+          returnsByOrderId.set(r.orderId, {
+            rrn: r.rrn,
+            returnReason: r.returnReason,
+            customerComment: r.customerComment,
+            stockOutcome: r.stockOutcome,
+            removalOrderNumber: r.removalOrderNumber,
+            dateReadyToCollect: r.dateReadyToCollect,
+            dateAddedToStock: r.dateAddedToStock,
+            returnDate: r.returnDate,
+          });
+        }
+      }
+    }
+
+    const data = rows.map((r) => {
+      const enrichment = r.orderId != null ? returnsByOrderId.get(r.orderId) : undefined;
+      return {
+        orderId: r.orderId,
+        productTitle: r.productTitle ?? 'Unknown Product',
+        sku: r.sku ?? null,
+        orderDate: r.orderDate?.toISOString() ?? null,
+        reversalAmountCents: r.reversalAmountCents ?? 0,
+        quantity: r.quantity,
+        sellingPriceCents: r.sellingPriceCents,
+        dateShippedToCustomer: r.dateShippedToCustomer?.toISOString() ?? null,
+        saleStatus: r.saleStatus ?? null,
+        // ── Takealot Returns Export enrichment (null when no return row yet) ──
+        rrn: enrichment?.rrn ?? null,
+        returnReason: enrichment?.returnReason ?? null,
+        customerComment: enrichment?.customerComment ?? null,
+        stockOutcome: enrichment?.stockOutcome ?? null,
+        removalOrderNumber: enrichment?.removalOrderNumber ?? null,
+        dateReadyToCollect: enrichment?.dateReadyToCollect?.toISOString() ?? null,
+        dateAddedToStock: enrichment?.dateAddedToStock?.toISOString() ?? null,
+      };
+    });
 
     const result = {
       data,

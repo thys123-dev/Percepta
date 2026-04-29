@@ -68,6 +68,18 @@ vi.mock('../../../db/index.js', () => ({
       saleStatus: 'sale_status',
       hasReversal: 'has_reversal',
     },
+    takealotReturns: {
+      sellerId: 'seller_id',
+      orderId: 'order_id',
+      rrn: 'rrn',
+      returnReason: 'return_reason',
+      customerComment: 'customer_comment',
+      stockOutcome: 'stock_outcome',
+      removalOrderNumber: 'removal_order_number',
+      dateReadyToCollect: 'date_ready_to_collect',
+      dateAddedToStock: 'date_added_to_stock',
+      returnDate: 'return_date',
+    },
   },
 }));
 
@@ -143,6 +155,17 @@ function makeCountChain(total: number) {
   return {
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockResolvedValue([{ total }]),
+  };
+}
+
+/**
+ * Chain that resolves at .where() — used for the enrichment select against
+ * takealot_returns inside GET /inventory/returns when the page has rows.
+ */
+function makeWhereResolvingChain(value: unknown) {
+  return {
+    from: vi.fn().mockReturnThis(),
+    where: vi.fn().mockResolvedValue(value),
   };
 }
 
@@ -418,7 +441,8 @@ describe('GET /inventory/returns', () => {
     const { db } = await import('../../../db/index.js');
     vi.mocked(db.select)
       .mockReturnValueOnce(makeSelectChain(MOCK_RETURN_ROWS) as never)
-      .mockReturnValueOnce(makeCountChain(1) as never);
+      .mockReturnValueOnce(makeCountChain(1) as never)
+      .mockReturnValueOnce(makeWhereResolvingChain([]) as never); // takealot_returns enrichment
 
     const res = await app.inject({ method: 'GET', url: '/inventory/returns' });
     expect(res.statusCode).toBe(200);
@@ -431,7 +455,8 @@ describe('GET /inventory/returns', () => {
     const { db } = await import('../../../db/index.js');
     vi.mocked(db.select)
       .mockReturnValueOnce(makeSelectChain(MOCK_RETURN_ROWS) as never)
-      .mockReturnValueOnce(makeCountChain(1) as never);
+      .mockReturnValueOnce(makeCountChain(1) as never)
+      .mockReturnValueOnce(makeWhereResolvingChain([]) as never); // takealot_returns enrichment
 
     const res = await app.inject({ method: 'GET', url: '/inventory/returns' });
     const body = res.json<{ data: Array<{ orderDate: string; dateShippedToCustomer: string }> }>();
@@ -476,7 +501,8 @@ describe('GET /inventory/returns', () => {
     const { db } = await import('../../../db/index.js');
     vi.mocked(db.select)
       .mockReturnValueOnce(makeSelectChain(MOCK_RETURN_ROWS) as never)
-      .mockReturnValueOnce(makeCountChain(1) as never);
+      .mockReturnValueOnce(makeCountChain(1) as never)
+      .mockReturnValueOnce(makeWhereResolvingChain([]) as never); // takealot_returns enrichment
 
     const res = await app.inject({ method: 'GET', url: '/inventory/returns' });
     const body = res.json<{ data: Array<Record<string, unknown>> }>();
@@ -491,6 +517,80 @@ describe('GET /inventory/returns', () => {
     expect(row).toHaveProperty('sellingPriceCents');
     expect(row).toHaveProperty('dateShippedToCustomer');
     expect(row).toHaveProperty('saleStatus');
+    // ── New takealot_returns enrichment fields (null when no return row) ──
+    expect(row).toHaveProperty('rrn');
+    expect(row).toHaveProperty('returnReason');
+    expect(row).toHaveProperty('customerComment');
+    expect(row).toHaveProperty('stockOutcome');
+    expect(row).toHaveProperty('removalOrderNumber');
+  });
+
+  it('enriches rows with takealot_returns data when matching RRN exists', async () => {
+    const { db } = await import('../../../db/index.js');
+    const enrichmentRows = [
+      {
+        orderId: 98765432,
+        rrn: 'RRN-TEST-1234',
+        returnReason: 'Defective',
+        customerComment: 'Phone wouldn\'t turn on',
+        stockOutcome: 'removal_order',
+        removalOrderNumber: 'RO-12345-2026-04-01-JHB',
+        dateReadyToCollect: new Date('2026-03-15T00:00:00Z'),
+        dateAddedToStock: null,
+        returnDate: new Date('2026-03-13T00:00:00Z'),
+      },
+    ];
+    vi.mocked(db.select)
+      .mockReturnValueOnce(makeSelectChain(MOCK_RETURN_ROWS) as never)
+      .mockReturnValueOnce(makeCountChain(1) as never)
+      .mockReturnValueOnce(makeWhereResolvingChain(enrichmentRows) as never);
+
+    const res = await app.inject({ method: 'GET', url: '/inventory/returns' });
+    const body = res.json<{ data: Array<Record<string, unknown>> }>();
+    const row = body.data[0];
+
+    expect(row.rrn).toBe('RRN-TEST-1234');
+    expect(row.returnReason).toBe('Defective');
+    expect(row.customerComment).toBe('Phone wouldn\'t turn on');
+    expect(row.stockOutcome).toBe('removal_order');
+    expect(row.removalOrderNumber).toBe('RO-12345-2026-04-01-JHB');
+  });
+
+  it('picks the latest return when an order has multiple', async () => {
+    const { db } = await import('../../../db/index.js');
+    const enrichmentRows = [
+      {
+        orderId: 98765432,
+        rrn: 'RRN-OLD',
+        returnReason: 'Changed my mind',
+        customerComment: null,
+        stockOutcome: 'sellable',
+        removalOrderNumber: null,
+        dateReadyToCollect: null,
+        dateAddedToStock: new Date('2026-02-15T00:00:00Z'),
+        returnDate: new Date('2026-02-10T00:00:00Z'),
+      },
+      {
+        orderId: 98765432,
+        rrn: 'RRN-NEW',
+        returnReason: 'Defective',
+        customerComment: 'broken',
+        stockOutcome: 'removal_order',
+        removalOrderNumber: 'RO-XYZ',
+        dateReadyToCollect: null,
+        dateAddedToStock: null,
+        returnDate: new Date('2026-04-01T00:00:00Z'),
+      },
+    ];
+    vi.mocked(db.select)
+      .mockReturnValueOnce(makeSelectChain(MOCK_RETURN_ROWS) as never)
+      .mockReturnValueOnce(makeCountChain(1) as never)
+      .mockReturnValueOnce(makeWhereResolvingChain(enrichmentRows) as never);
+
+    const res = await app.inject({ method: 'GET', url: '/inventory/returns' });
+    const body = res.json<{ data: Array<Record<string, unknown>> }>();
+    expect(body.data[0]?.rrn).toBe('RRN-NEW');
+    expect(body.data[0]?.returnReason).toBe('Defective');
   });
 
   it('defaults sort to order_date descending (returns 200)', async () => {

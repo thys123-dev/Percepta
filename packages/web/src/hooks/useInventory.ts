@@ -93,6 +93,14 @@ export interface ReturnRow {
   sellingPriceCents: number;
   dateShippedToCustomer: string | null;
   saleStatus: string | null;
+  // ── Takealot Returns Export enrichment (null until that XLSX is imported) ──
+  rrn: string | null;
+  returnReason: string | null;
+  customerComment: string | null;
+  stockOutcome: 'sellable' | 'removal_order' | null;
+  removalOrderNumber: string | null;
+  dateReadyToCollect: string | null;
+  dateAddedToStock: string | null;
 }
 
 export type ReturnsSortKey = 'order_date' | 'reversal_amount' | 'product_title';

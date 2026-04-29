@@ -457,3 +457,78 @@ export const sellerCosts = pgTable(
     uniqueIndex('seller_costs_unique_idx').on(table.sellerId, table.month, table.costType),
   ]
 );
+
+// =============================================================================
+// takealot_return_imports — Tracks Takealot Returns Export XLSX uploads
+// =============================================================================
+
+export const takealotReturnImports = pgTable(
+  'takealot_return_imports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sellerId: uuid('seller_id')
+      .notNull()
+      .references(() => sellers.id, { onDelete: 'cascade' }),
+    fileName: varchar('file_name', { length: 255 }).notNull(),
+    rowCount: integer('row_count').notNull(),
+    insertedCount: integer('inserted_count').default(0),
+    duplicateCount: integer('duplicate_count').default(0),
+    ordersUpdated: integer('orders_updated').default(0),
+    status: varchar('status', { length: 20 }).default('pending'),
+    errorMessage: text('error_message'),
+    dateRangeStart: timestamp('date_range_start', { withTimezone: true }),
+    dateRangeEnd: timestamp('date_range_end', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    index('takealot_return_imports_seller_idx').on(table.sellerId),
+  ]
+);
+
+// =============================================================================
+// takealot_returns — One row per RRN from Takealot Returns Export XLSX
+// =============================================================================
+
+export const takealotReturns = pgTable(
+  'takealot_returns',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sellerId: uuid('seller_id')
+      .notNull()
+      .references(() => sellers.id, { onDelete: 'cascade' }),
+    importId: uuid('import_id')
+      .references(() => takealotReturnImports.id, { onDelete: 'set null' }),
+    rrn: varchar('rrn', { length: 64 }).notNull(),
+    orderId: integer('order_id'),
+    returnDate: timestamp('return_date', { withTimezone: true }).notNull(),
+    productTitle: varchar('product_title', { length: 500 }),
+    sku: varchar('sku', { length: 255 }),
+    tsin: integer('tsin'),
+    /** Defective | Not what I ordered | Changed my mind | Exchange | Failed delivery | Exception */
+    returnReason: varchar('return_reason', { length: 64 }),
+    customerComment: text('customer_comment'),
+    quantity: integer('quantity').notNull().default(1),
+    region: varchar('region', { length: 10 }),
+    /** Normalised: 'sellable' | 'removal_order' (or null for in-flight returns) */
+    stockOutcome: varchar('stock_outcome', { length: 20 }),
+    sellerNote: text('seller_note'),
+    customerOrderReversalCents: integer('customer_order_reversal_cents'),
+    successFeeReversalCents: integer('success_fee_reversal_cents'),
+    fulfillmentFeeReversalCents: integer('fulfillment_fee_reversal_cents'),
+    courierFeeReversalCents: integer('courier_fee_reversal_cents'),
+    removalOrderNumber: varchar('removal_order_number', { length: 64 }),
+    dateReadyToCollect: timestamp('date_ready_to_collect', { withTimezone: true }),
+    dateAddedToStock: timestamp('date_added_to_stock', { withTimezone: true }),
+    /** Future-proof: every column from the source export, preserved verbatim. */
+    rawRow: jsonb('raw_row'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('takealot_returns_seller_rrn_idx').on(table.sellerId, table.rrn),
+    index('takealot_returns_seller_order_idx').on(table.sellerId, table.orderId),
+    index('takealot_returns_seller_sku_idx').on(table.sellerId, table.sku),
+    index('takealot_returns_seller_reason_idx').on(table.sellerId, table.returnReason),
+    index('takealot_returns_seller_date_idx').on(table.sellerId, table.returnDate),
+  ]
+);

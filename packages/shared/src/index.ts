@@ -351,3 +351,30 @@ export interface AccountTransactionCommitResult {
   ordersUpdated: number;
   message: string;
 }
+
+// =============================================================================
+// Takealot Returns Export (XLSX) — preview + commit shapes
+// =============================================================================
+
+export type TakealotReturnsStockOutcome = 'sellable' | 'removal_order';
+
+export interface TakealotReturnsPreview {
+  mode: 'preview';
+  parsed: { totalRows: number; parseErrors: number };
+  byReason: Record<string, { count: number; quantity: number; reversalCents: number }>;
+  byStockOutcome: { sellable: number; removalOrder: number; pending: number };
+  orderLinked: { count: number; matchedToOrders: number; unmatchedOrders: number };
+  duplicateCount: number;
+  totalReversalCents: number;
+  parseErrors: Array<{ line: number; message: string }>;
+  dateRange: { earliest: string; latest: string } | null;
+}
+
+export interface TakealotReturnsCommitResult {
+  mode: 'commit';
+  importId: string;
+  inserted: number;
+  duplicatesSkipped: number;
+  ordersUpdated: number;
+  message: string;
+}

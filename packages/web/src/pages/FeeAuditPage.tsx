@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Download, Loader2 } from 'lucide-react';
 import { SalesReportUpload } from '../components/fees/SalesReportUpload';
 import { AccountTransactionUpload } from '../components/fees/AccountTransactionUpload';
+import { ReturnsImportUpload } from '../components/fees/ReturnsImportUpload';
 import { FeeDiscrepancyTable } from '../components/fees/FeeDiscrepancyTable';
 import { ImportHistoryList } from '../components/fees/ImportHistoryList';
 import { AccountTransactionHistory } from '../components/fees/AccountTransactionHistory';
@@ -10,11 +11,19 @@ import { ProductDiscrepancyTable } from '../components/fees/ProductDiscrepancyTa
 import { DiscrepancyCharts } from '../components/fees/DiscrepancyCharts';
 import { useExportDiscrepancies } from '../hooks/useSalesReport';
 
-type Tab = 'upload' | 'acct-transactions' | 'discrepancies' | 'by-product' | 'insights' | 'history';
+type Tab =
+  | 'upload'
+  | 'acct-transactions'
+  | 'returns-import'
+  | 'discrepancies'
+  | 'by-product'
+  | 'insights'
+  | 'history';
 
 const VALID_TABS: readonly Tab[] = [
   'upload',
   'acct-transactions',
+  'returns-import',
   'discrepancies',
   'by-product',
   'insights',
@@ -36,6 +45,7 @@ export function FeeAuditPage() {
   const tabs: Array<{ key: Tab; label: string }> = [
     { key: 'upload', label: 'Sales Report' },
     { key: 'acct-transactions', label: 'Account Transactions' },
+    { key: 'returns-import', label: 'Returns Export' },
     { key: 'discrepancies', label: 'Fee Discrepancies' },
     { key: 'by-product', label: 'By Product' },
     { key: 'insights', label: 'Insights' },
@@ -92,6 +102,7 @@ export function FeeAuditPage() {
       {/* Tab content */}
       {tab === 'upload' && <SalesReportUpload onImportComplete={() => setTab('discrepancies')} />}
       {tab === 'acct-transactions' && <AccountTransactionUpload />}
+      {tab === 'returns-import' && <ReturnsImportUpload />}
       {tab === 'discrepancies' && <FeeDiscrepancyTable />}
       {tab === 'by-product' && <ProductDiscrepancyTable />}
       {tab === 'insights' && <DiscrepancyCharts />}
