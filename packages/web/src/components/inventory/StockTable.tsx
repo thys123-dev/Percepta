@@ -7,7 +7,7 @@
 
 import { useState, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, AlertTriangle, ChevronLeft, ChevronRight, Loader2, ArrowUpDown, RefreshCw } from 'lucide-react';
+import { Search, AlertTriangle, ChevronLeft, ChevronRight, Loader2, ArrowUpDown, RefreshCw, ExternalLink } from 'lucide-react';
 import {
   useInventoryStock,
   type StockSortKey,
@@ -282,7 +282,20 @@ export function StockTable() {
                               <div className="text-xs text-gray-400">
                                 {row.sku ?? `ID: ${row.offerId}`}
                                 {row.tsin && (
-                                  <span className="ml-1.5 text-gray-300">· TSIN {row.tsin}</span>
+                                  <>
+                                    <span className="mx-1.5 text-gray-300">·</span>
+                                    <a
+                                      href={`https://www.takealot.com/all?qsearch=${row.tsin}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-0.5 text-gray-400 hover:text-brand-600 hover:underline"
+                                      title="Open this product on Takealot"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      TSIN {row.tsin}
+                                      <ExternalLink className="h-2.5 w-2.5" />
+                                    </a>
+                                  </>
                                 )}
                               </div>
                             </div>

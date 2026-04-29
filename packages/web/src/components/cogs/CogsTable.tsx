@@ -7,7 +7,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { Search, Save, Check, AlertCircle, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Save, Check, AlertCircle, Loader2, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { useOfferList, useUpdateCogs, type OfferForCogs } from '../../hooks/useCogsImport.js';
 import { formatCurrency } from '../../utils/format.js';
 
@@ -234,7 +234,20 @@ export function CogsTable() {
                               <div className="text-xs text-gray-400">
                                 {offer.sku ?? `ID: ${offer.offerId}`}
                                 {offer.tsin && (
-                                  <span className="ml-1.5 text-gray-300">· TSIN {offer.tsin}</span>
+                                  <>
+                                    <span className="mx-1.5 text-gray-300">·</span>
+                                    <a
+                                      href={`https://www.takealot.com/all?qsearch=${offer.tsin}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-0.5 text-gray-400 hover:text-brand-600 hover:underline"
+                                      title="Open this product on Takealot"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      TSIN {offer.tsin}
+                                      <ExternalLink className="h-2.5 w-2.5" />
+                                    </a>
+                                  </>
                                 )}
                                 {offer.category && ` · ${offer.category}`}
                               </div>
