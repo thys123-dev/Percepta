@@ -7,7 +7,11 @@
 
 import { useState, useCallback } from 'react';
 import { Search, AlertTriangle, ChevronLeft, ChevronRight, Loader2, ArrowUpDown } from 'lucide-react';
-import { useInventoryStock, type StockSortKey } from '../../hooks/useInventory.js';
+import {
+  useInventoryStock,
+  type StockSortKey,
+  type StockStatusFilter,
+} from '../../hooks/useInventory.js';
 import { formatCurrency } from '../../utils/format.js';
 import { clsx } from 'clsx';
 
@@ -49,6 +53,12 @@ const SORT_OPTIONS: { key: StockSortKey; label: string }[] = [
   { key: 'title', label: 'A–Z' },
 ];
 
+const STATUS_OPTIONS: { key: StockStatusFilter; label: string }[] = [
+  { key: 'active', label: 'Active' },
+  { key: 'disabled', label: 'Disabled' },
+  { key: 'all', label: 'All' },
+];
+
 // =============================================================================
 // StockTable
 // =============================================================================
@@ -59,6 +69,12 @@ export function StockTable() {
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<StockSortKey>('stock_cover');
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
+  const [statusFilter, setStatusFilter] = useState<StockStatusFilter>('active');
+
+  const handleStatusChange = (next: StockStatusFilter) => {
+    setStatusFilter(next);
+    setPage(1);
+  };
 
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value);
@@ -85,6 +101,7 @@ export function StockTable() {
     order,
     limit: 50,
     page,
+    statusFilter,
   });
 
   const rows = data?.data ?? [];
@@ -92,6 +109,30 @@ export function StockTable() {
 
   return (
     <div className="space-y-4">
+      {/* Status filter row */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-gray-500">Listing status:</span>
+        {STATUS_OPTIONS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => handleStatusChange(key)}
+            className={clsx(
+              'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+              statusFilter === key
+                ? 'bg-brand-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            )}
+          >
+            {label}
+          </button>
+        ))}
+        {data?.pagination && (
+          <span className="ml-2 text-xs text-gray-400">
+            ({data.pagination.totalItems.toLocaleString()} {statusFilter === 'all' ? 'total' : statusFilter})
+          </span>
+        )}
+      </div>
+
       {/* Toolbar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         {/* Search */}
@@ -165,7 +206,11 @@ export function StockTable() {
                       <td colSpan={8} className="px-4 py-10 text-center text-sm text-gray-400">
                         {debouncedSearch
                           ? `No products matching "${debouncedSearch}"`
-                          : 'No products found. Stock data will appear after the next sync.'}
+                          : statusFilter === 'active'
+                            ? 'No active listings on Takealot. Try the "Disabled" or "All" filter to see paused products.'
+                            : statusFilter === 'disabled'
+                              ? 'No disabled listings.'
+                              : 'No products found. Stock data will appear after the next sync.'}
                       </td>
                     </tr>
                   )

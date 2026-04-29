@@ -35,12 +35,21 @@ export interface StockRow {
 
 export type StockSortKey = 'title' | 'stock_cover' | 'sales_velocity' | 'total_stock';
 
+/**
+ * Listing-status filter:
+ *   active   = Buyable / Not Buyable (default — what the seller can actually sell)
+ *   disabled = Disabled by Seller / Disabled by Takealot
+ *   all      = no filter
+ */
+export type StockStatusFilter = 'active' | 'disabled' | 'all';
+
 export interface StockParams {
   search?: string;
   sort?: StockSortKey;
   order?: 'asc' | 'desc';
   limit?: number;
   page?: number;
+  statusFilter?: StockStatusFilter;
 }
 
 export interface StockData {

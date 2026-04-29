@@ -35,6 +35,16 @@ const stockQuerySchema = z.object({
   order: z.enum(['asc', 'desc']).default('asc'),
   limit: z.coerce.number().min(1).max(200).default(50),
   page: z.coerce.number().min(1).default(1),
+  /**
+   * Filter by listing status group.
+   *   active   → Buyable / Not Buyable (anything not disabled). Default.
+   *   disabled → Anything in a Disabled-by-* state.
+   *   all      → No filter.
+   * Defaulting to 'active' keeps the inventory page focused on what the
+   * seller can actually sell right now; disabled SKUs stay accessible
+   * via the toggle but don't drown the screen.
+   */
+  statusFilter: z.enum(['active', 'disabled', 'all']).default('active'),
 });
 
 const returnsQuerySchema = z.object({
@@ -59,7 +69,7 @@ export async function inventoryRoutes(server: FastifyInstance) {
     const params = stockQuerySchema.parse(request.query);
     const offset = (params.page - 1) * params.limit;
 
-    const cacheKey = `inventory:${sellerId}:stock:${params.sort}:${params.order}:${params.page}:${params.limit}:${params.search ?? ''}`;
+    const cacheKey = `inventory:${sellerId}:stock:${params.sort}:${params.order}:${params.page}:${params.limit}:${params.search ?? ''}:${params.statusFilter}`;
     const cached = await cacheGet(cacheKey);
     if (cached !== null) return cached;
 
@@ -74,6 +84,18 @@ export async function inventoryRoutes(server: FastifyInstance) {
         )!
       );
     }
+
+    // Status filter — Takealot statuses we've observed include
+    // "Buyable", "Not Buyable", "Disabled by Seller", "Disabled by Takealot".
+    // We treat anything containing 'Disabled' as the disabled group.
+    if (params.statusFilter === 'active') {
+      conditions.push(
+        sql`(${schema.offers.status} IS NULL OR ${schema.offers.status} NOT ILIKE '%disabled%')`
+      );
+    } else if (params.statusFilter === 'disabled') {
+      conditions.push(sql`${schema.offers.status} ILIKE '%disabled%'`);
+    }
+    // 'all' adds no condition.
 
     const where = and(...conditions);
 
