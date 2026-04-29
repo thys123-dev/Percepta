@@ -10,6 +10,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, AlertTriangle, ChevronLeft, ChevronRight, Loader2, ArrowUpDown, RefreshCw, ExternalLink } from 'lucide-react';
 import {
   useInventoryStock,
+  type StockRow,
   type StockSortKey,
   type StockStatusFilter,
 } from '../../hooks/useInventory.js';
@@ -72,6 +73,25 @@ const STATUS_COUNT_LABEL: Record<StockStatusFilter, string> = {
   disabled:    'disabled',
   all:         'total',
 };
+
+/**
+ * Takealot's API doesn't tell us *why* a product is Not Buyable, so we
+ * infer the most likely cause from the offer's local data. Covers
+ * roughly 80% of cases — almost always a stockout. Falls back to a
+ * generic message that points the seller at the Takealot Seller Portal.
+ */
+function inferNotBuyableReason(row: StockRow): string {
+  if (row.totalStock === 0 && row.salesUnits30d > 0) {
+    return 'Not Buyable — recently sold out (had sales in the last 30 days). Restock at Takealot to make it Buyable again.';
+  }
+  if (row.totalStock === 0) {
+    return 'Not Buyable — no stock at any DC (JHB / CPT / DBN). Send a replenishment to make it Buyable.';
+  }
+  if (row.leadtimeDays > 14) {
+    return `Not Buyable — leadtime of ${row.leadtimeDays} days may be too long for this product's category. Try reducing it in your Seller Portal.`;
+  }
+  return 'Not Buyable — listed but not currently for sale. Check the Issues tab for this product on the Takealot Seller Portal for the specific reason.';
+}
 
 // =============================================================================
 // StockTable
@@ -293,7 +313,14 @@ export function StockTable() {
                           <td className="px-4 py-3">
                             <div className="max-w-[260px]">
                               <div className="flex items-center gap-2">
-                                <StatusDot status={row.status} />
+                                <StatusDot
+                                  status={row.status}
+                                  tooltip={
+                                    row.status === 'Not Buyable'
+                                      ? inferNotBuyableReason(row)
+                                      : undefined
+                                  }
+                                />
                                 <span className="truncate font-medium text-gray-800">
                                   {row.title}
                                 </span>

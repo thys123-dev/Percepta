@@ -17,6 +17,12 @@ interface StatusDotProps {
   status: string | null;
   /** Extra classes for layout (e.g. 'mr-2'). */
   className?: string;
+  /**
+   * Optional override for the hover tooltip. When omitted we fall back to
+   * the raw Takealot status string. Callers can pass a more helpful
+   * inferred reason for 'Not Buyable' (e.g. "no stock at any DC").
+   */
+  tooltip?: string;
 }
 
 type Category = 'buyable' | 'not_buyable' | 'disabled';
@@ -35,14 +41,14 @@ const STYLES: Record<Category, { color: string; label: string }> = {
   disabled:    { color: 'bg-gray-400',   label: 'Disabled' },
 };
 
-export function StatusDot({ status, className }: StatusDotProps) {
+export function StatusDot({ status, className, tooltip }: StatusDotProps) {
   const cat = categorise(status);
   if (!cat) return null;
   const { color, label } = STYLES[cat];
   return (
     <span
       className={clsx('inline-block h-2 w-2 flex-shrink-0 rounded-full', color, className)}
-      title={status ?? label}
+      title={tooltip ?? status ?? label}
       aria-label={label}
     />
   );
