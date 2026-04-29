@@ -220,7 +220,11 @@ export function CogsCsvImport() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [isDownloadingCsv, setIsDownloadingCsv] = useState(false);
   const [isDownloadingXlsx, setIsDownloadingXlsx] = useState(false);
-  const [commitDone, setCommitDone] = useState<{ updated: number; unmatched: number } | null>(null);
+  const [commitDone, setCommitDone] = useState<{
+    updated: number;
+    unmatched: number;
+    unmatchedRows?: import('../../hooks/useCogsImport.js').UnmatchedRow[];
+  } | null>(null);
 
   const csvImport = useCsvImport();
 
@@ -284,6 +288,7 @@ export function CogsCsvImport() {
             setCommitDone({
               updated: data.updated ?? 0,
               unmatched: data.unmatched ?? 0,
+              unmatchedRows: data.unmatchedRows ?? [],
             });
             setFileName(null);
             setParsedRows([]);
@@ -339,23 +344,74 @@ export function CogsCsvImport() {
 
   // ✅ Commit success state
   if (commitDone) {
+    const hasUnmatched = (commitDone.unmatchedRows?.length ?? 0) > 0;
     return (
-      <div className="rounded-xl border border-green-200 bg-green-50 p-6 text-center">
-        <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-green-500" />
-        <h3 className="text-lg font-semibold text-green-800">Import complete!</h3>
-        <p className="mt-1 text-sm text-green-700">
-          Updated COGS for <strong>{commitDone.updated}</strong> product
-          {commitDone.updated !== 1 ? 's' : ''}.
-          {commitDone.unmatched > 0 && (
-            <> ({commitDone.unmatched} row{commitDone.unmatched > 1 ? 's' : ''} skipped — offer IDs not found)</>
-          )}
-        </p>
-        <p className="mt-2 text-xs text-green-600">
-          Profit calculations are being updated in the background.
-        </p>
-        <button onClick={handleReset} className="btn-secondary mt-4">
-          Import another file
-        </button>
+      <div className="space-y-4">
+        <div className="rounded-xl border border-green-200 bg-green-50 p-6 text-center">
+          <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-green-500" />
+          <h3 className="text-lg font-semibold text-green-800">Import complete!</h3>
+          <p className="mt-1 text-sm text-green-700">
+            Updated COGS for <strong>{commitDone.updated}</strong> product
+            {commitDone.updated !== 1 ? 's' : ''}.
+            {commitDone.unmatched > 0 && (
+              <> ({commitDone.unmatched} row{commitDone.unmatched > 1 ? 's' : ''} skipped — see below)</>
+            )}
+          </p>
+          <p className="mt-2 text-xs text-green-600">
+            Profit calculations are being updated in the background.
+          </p>
+          <button onClick={handleReset} className="btn-secondary mt-4">
+            Import another file
+          </button>
+        </div>
+
+        {/* Unmatched rows breakdown — surface the WHY for each skipped row */}
+        {hasUnmatched && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div className="mb-3 flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+              <div>
+                <h4 className="text-sm font-semibold text-amber-900">
+                  {commitDone.unmatched} row{commitDone.unmatched !== 1 ? 's' : ''} couldn't be matched
+                </h4>
+                <p className="mt-0.5 text-xs text-amber-700">
+                  These products weren't found in your synced offers table. Common
+                  reasons: the listing was deleted from Takealot, a typo in the
+                  spreadsheet, or the product is disabled and you haven't run
+                  "Sync disabled offers" yet.
+                </p>
+              </div>
+            </div>
+            <div className="overflow-hidden rounded-lg border border-amber-200 bg-white">
+              <table className="w-full text-xs">
+                <thead className="bg-amber-100/50">
+                  <tr className="text-left text-amber-900">
+                    <th className="px-3 py-2 font-medium">Offer ID</th>
+                    <th className="px-3 py-2 font-medium">SKU</th>
+                    <th className="px-3 py-2 text-right font-medium">COGS (R)</th>
+                    <th className="px-3 py-2 font-medium">Why it didn't match</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-amber-100">
+                  {commitDone.unmatchedRows!.map((row, i) => (
+                    <tr key={i} className="text-gray-700">
+                      <td className="px-3 py-2 font-mono">{row.offerId ?? '—'}</td>
+                      <td className="px-3 py-2 font-mono">{row.sku ?? '—'}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {(row.cogsCents / 100).toFixed(2)}
+                      </td>
+                      <td className="px-3 py-2 text-amber-800">{row.reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-3 text-xs text-amber-700">
+              Tip: copy these offer IDs/SKUs and look them up in your Takealot
+              Seller Portal to confirm they still exist.
+            </p>
+          </div>
+        )}
       </div>
     );
   }

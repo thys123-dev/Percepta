@@ -663,12 +663,36 @@ export async function sellerRoutes(server: FastifyInstance) {
     // and sku.
     const updatedOfferIds: number[] = [];
     const seen = new Set<number>();
-    let unmatched = 0;
+    const unmatchedRows: Array<{
+      offerId: number | null;
+      sku: string | null;
+      cogsCents: number;
+      inboundCostCents: number;
+      reason: string;
+    }> = [];
 
     for (const row of rows) {
       const match = resolveMatch(row);
       if (!match) {
-        unmatched++;
+        // Build a useful 'reason' so the UI can tell the user WHY each row
+        // failed to match without them having to guess.
+        let reason: string;
+        if (row.offerId !== undefined && row.sku) {
+          reason = `Neither offer_id ${row.offerId} nor SKU "${row.sku}" matches any offer for this seller.`;
+        } else if (row.offerId !== undefined) {
+          reason = `Offer ID ${row.offerId} not found. The product may have been deleted from your Takealot catalogue.`;
+        } else if (row.sku) {
+          reason = `SKU "${row.sku}" not found. Check spelling, or run "Sync disabled offers" if it's a paused product.`;
+        } else {
+          reason = 'Row had no offer_id or SKU.';
+        }
+        unmatchedRows.push({
+          offerId: row.offerId ?? null,
+          sku: row.sku ?? null,
+          cogsCents: row.cogsCents,
+          inboundCostCents: row.inboundCostCents ?? 0,
+          reason,
+        });
         continue;
       }
       if (seen.has(match.offerId)) continue;
@@ -716,7 +740,8 @@ export async function sellerRoutes(server: FastifyInstance) {
     return {
       mode: 'commit',
       updated: updatedOfferIds.length,
-      unmatched,
+      unmatched: unmatchedRows.length,
+      unmatchedRows,
     };
   });
 

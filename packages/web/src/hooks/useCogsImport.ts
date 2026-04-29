@@ -73,6 +73,15 @@ export interface CsvImportPayload {
   }[];
 }
 
+/** Per-row diagnostic returned by the commit endpoint when a row didn't match. */
+export interface UnmatchedRow {
+  offerId: number | null;
+  sku: string | null;
+  cogsCents: number;
+  inboundCostCents: number;
+  reason: string;
+}
+
 export interface CsvImportResult {
   mode: 'preview' | 'commit';
   // Preview mode:
@@ -81,6 +90,7 @@ export interface CsvImportResult {
   unmatched?: number;
   // Commit mode:
   updated?: number;
+  unmatchedRows?: UnmatchedRow[];
 }
 
 // =============================================================================
