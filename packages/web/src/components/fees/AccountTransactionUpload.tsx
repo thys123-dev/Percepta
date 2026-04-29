@@ -318,21 +318,55 @@ export function AccountTransactionUpload({ onImportComplete }: Props) {
               </div>
             )}
 
-            {/* Parse errors */}
-            {preview.parseErrors.length > 0 && (
-              <div className="border-t border-gray-100 px-6 py-4">
-                <h4 className="text-sm font-medium text-amber-700 mb-2">
-                  Parse Errors ({preview.parsed.parseErrors})
-                </h4>
-                <div className="space-y-1">
-                  {preview.parseErrors.map((err, i) => (
-                    <p key={i} className="text-xs text-amber-600">
-                      Line {err.line}: {err.message}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Parse warnings — advisory only; rows still import. */}
+            {preview.parseErrors.length > 0 && (() => {
+              // Distinguish unknown-transaction-type warnings (rows still import)
+              // from genuine parse errors (rows skipped).
+              const unknownTypeRe = /^Unknown transaction type:/;
+              const warnings = preview.parseErrors.filter((e) => unknownTypeRe.test(e.message));
+              const errors = preview.parseErrors.filter((e) => !unknownTypeRe.test(e.message));
+
+              return (
+                <>
+                  {errors.length > 0 && (
+                    <div className="border-t border-gray-100 px-6 py-4">
+                      <h4 className="text-sm font-medium text-red-700 mb-2">
+                        Parse Errors ({errors.length})
+                      </h4>
+                      <p className="text-xs text-red-600 mb-2">
+                        These rows could not be parsed and will be skipped.
+                      </p>
+                      <div className="space-y-1">
+                        {errors.map((err, i) => (
+                          <p key={i} className="text-xs text-red-600">
+                            Line {err.line}: {err.message}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {warnings.length > 0 && (
+                    <div className="border-t border-gray-100 px-6 py-4">
+                      <h4 className="text-sm font-medium text-amber-700 mb-2">
+                        Warnings ({warnings.length})
+                      </h4>
+                      <p className="text-xs text-amber-600 mb-2">
+                        Takealot transaction types we don't yet categorise. The rows
+                        will still be imported and stored — they just won't show up in
+                        the cost breakdown above.
+                      </p>
+                      <div className="space-y-1">
+                        {warnings.map((err, i) => (
+                          <p key={i} className="text-xs text-amber-600">
+                            Line {err.line}: {err.message}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             {/* Duplicate warning */}
             {preview.duplicateCount > 0 && (

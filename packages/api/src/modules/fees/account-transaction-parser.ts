@@ -67,6 +67,10 @@ export interface AccountTransactionParseResult {
 // Classification Constants
 // =============================================================================
 
+// When Takealot adds a new transaction type, append it here AND map it into
+// the right bucket below (ORDER_LINKED_TYPES if it has an order_id, REVERSAL_TYPES
+// if it's a customer-driven refund, NON_ORDER_COST_MAP if it's a non-order cost).
+// Unknown types still parse and store — they just surface as a warning until catalogued.
 export const VALID_TRANSACTION_TYPES = new Set([
   'Customer Order Payment',
   'Success Fee Charge',
@@ -80,11 +84,17 @@ export const VALID_TRANSACTION_TYPES = new Set([
   'Stock Loss Fulfilment Fee',
   'Stock Loss Success Fee',
   'Stock Loss Payment',
+  'Stock Loss Reversal',
+  'Stock Loss Success Fee Reversal',
+  'Stock Loss Fulfilment Fee Reversal',
   'Returns Removal Order Fee',
   'Takealot Removal Order Fee',
+  'Removal Order Fee',
   'Subscription Fee Charge',
   'Ad Credit Purchase',
   'Disbursement',
+  'Return Dispute Payment',
+  'Manual Payment',
 ]);
 
 /** Transaction types that are linked to a specific order. */
@@ -105,17 +115,28 @@ export const REVERSAL_TYPES = new Set([
   'Fulfilment Fee Reversal',
 ]);
 
-/** Maps non-order transaction types to seller_costs.cost_type values. */
+/**
+ * Maps non-order transaction types to seller_costs.cost_type values.
+ * Reversals share the bucket of the original charge — sums incrementally so
+ * negative-side rows offset the positive side, leaving a net monthly total.
+ */
 export const NON_ORDER_COST_MAP: Record<string, string> = {
   'Storage Fee Charge': 'storage',
   'Subscription Fee Charge': 'subscription',
   'Ad Credit Purchase': 'ad_spend',
   'Returns Removal Order Fee': 'removal',
   'Takealot Removal Order Fee': 'removal',
+  'Removal Order Fee': 'removal',
   'Stock Loss Payment': 'stock_loss',
   'Stock Loss Success Fee': 'stock_loss',
   'Stock Loss Fulfilment Fee': 'stock_loss',
+  'Stock Loss Reversal': 'stock_loss',
+  'Stock Loss Success Fee Reversal': 'stock_loss',
+  'Stock Loss Fulfilment Fee Reversal': 'stock_loss',
   'Order Cancellation Penalty': 'cancellation_penalty',
+  // 'Return Dispute Payment' and 'Manual Payment' deliberately not bucketed —
+  // they're stored as transactions but are too varied to auto-aggregate. Sellers
+  // can review them via the raw account_transactions ledger.
 };
 
 // =============================================================================
