@@ -2,7 +2,9 @@ import { useState, useCallback } from 'react';
 import { Upload, FileText, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import {
   useAccountTransactionImport,
+  useAccountTransactionHistory,
 } from '../../hooks/useAccountTransactions';
+import { LastUploadBanner } from './LastUploadBanner';
 import type {
   AccountTransactionPreview,
   AccountTransactionCommitResult,
@@ -40,6 +42,8 @@ export function AccountTransactionUpload({ onImportComplete }: Props) {
   const [commitResult, setCommitResult] = useState<AccountTransactionCommitResult | null>(null);
 
   const importMutation = useAccountTransactionImport();
+  const { data: history, isLoading: historyLoading } = useAccountTransactionHistory();
+  const latest = history?.[0] ?? null;
 
   const handleFileDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -135,6 +139,27 @@ export function AccountTransactionUpload({ onImportComplete }: Props) {
 
   return (
     <div className="space-y-6">
+      {/* Last upload status */}
+      <LastUploadBanner
+        label="Account Transactions"
+        isLoading={historyLoading}
+        latest={
+          latest
+            ? {
+                fileName: latest.fileName,
+                status: latest.status,
+                createdAt: latest.createdAt,
+                primaryCount: latest.insertedCount,
+                secondaryCount: latest.duplicateCount,
+                dateRangeStart: latest.dateRangeStart,
+                dateRangeEnd: latest.dateRangeEnd,
+              }
+            : null
+        }
+        primaryCountLabel="transactions imported"
+        secondaryCountLabel="duplicates skipped"
+      />
+
       {/* Info banner */}
       <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
         <h3 className="text-sm font-medium text-blue-900">Why import your account transactions?</h3>

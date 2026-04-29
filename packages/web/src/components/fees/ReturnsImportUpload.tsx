@@ -10,8 +10,10 @@ import { useState, useCallback } from 'react';
 import { Upload, FileText, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import {
   useTakealotReturnsImport,
+  useTakealotReturnsImportHistory,
   fileToBase64,
 } from '../../hooks/useReturns.js';
+import { LastUploadBanner } from './LastUploadBanner';
 import type {
   TakealotReturnsPreview,
   TakealotReturnsCommitResult,
@@ -43,6 +45,8 @@ export function ReturnsImportUpload({ onImportComplete }: Props) {
   const [readError, setReadError] = useState<string | null>(null);
 
   const importMutation = useTakealotReturnsImport();
+  const { data: history, isLoading: historyLoading } = useTakealotReturnsImportHistory();
+  const latest = history?.[0] ?? null;
 
   const handleFileDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -142,6 +146,27 @@ export function ReturnsImportUpload({ onImportComplete }: Props) {
 
   return (
     <div className="space-y-6">
+      {/* Last upload status */}
+      <LastUploadBanner
+        label="Returns Export"
+        isLoading={historyLoading}
+        latest={
+          latest
+            ? {
+                fileName: latest.fileName,
+                status: latest.status,
+                createdAt: latest.createdAt,
+                primaryCount: latest.insertedCount,
+                secondaryCount: latest.duplicateCount,
+                dateRangeStart: latest.dateRangeStart,
+                dateRangeEnd: latest.dateRangeEnd,
+              }
+            : null
+        }
+        primaryCountLabel="returns imported"
+        secondaryCountLabel="duplicates skipped"
+      />
+
       {/* Info banner */}
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
         <h3 className="text-sm font-medium text-blue-900">Why import the Takealot Returns Export?</h3>

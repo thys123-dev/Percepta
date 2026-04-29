@@ -2,9 +2,11 @@ import { useState, useCallback } from 'react';
 import { Upload, FileText, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import {
   useSalesReportImport,
+  useImportHistory,
   type SalesReportPreview,
   type SalesReportCommitResult,
 } from '../../hooks/useSalesReport';
+import { LastUploadBanner } from './LastUploadBanner';
 
 interface Props {
   onImportComplete?: () => void;
@@ -17,6 +19,8 @@ export function SalesReportUpload({ onImportComplete }: Props) {
   const [commitResult, setCommitResult] = useState<SalesReportCommitResult | null>(null);
 
   const importMutation = useSalesReportImport();
+  const { data: history, isLoading: historyLoading } = useImportHistory();
+  const latest = history?.[0] ?? null;
 
   const handleFileDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -103,6 +107,25 @@ export function SalesReportUpload({ onImportComplete }: Props) {
 
   return (
     <div className="space-y-6">
+      {/* Last upload status */}
+      <LastUploadBanner
+        label="Sales Report"
+        isLoading={historyLoading}
+        latest={
+          latest
+            ? {
+                fileName: latest.fileName,
+                status: latest.status,
+                createdAt: latest.createdAt,
+                primaryCount: latest.updatedCount,
+                secondaryCount: latest.unmatchedCount,
+              }
+            : null
+        }
+        primaryCountLabel="orders updated"
+        secondaryCountLabel="unmatched"
+      />
+
       {/* Info banner */}
       <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
         <h3 className="text-sm font-medium text-blue-900">Why import your sales report?</h3>
