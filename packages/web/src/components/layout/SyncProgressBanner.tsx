@@ -9,12 +9,18 @@
  *   - "Sync disabled offers" button on the inventory page
  *   - Daily reconciliation
  *
- * The banner self-hides 30 seconds after the last progress event (worker
- * has gone quiet → assume done) OR immediately on an explicit
- * 'complete' / 'failed' event. On hide, it invalidates every cached
- * query that could be affected by the sync so the dashboard,
- * inventory and COGS pages re-fetch with fresh data — no manual
- * refresh required.
+ * Lifecycle:
+ *   in-progress   → live progress messages from the worker
+ *   refreshing    → worker is done, banner is awaiting fresh data
+ *                   from React Query before declaring success. This
+ *                   prevents the green ✓ banner from appearing
+ *                   BEFORE the table actually populates.
+ *   success       → green ✓ for ~4 seconds, then auto-hides
+ *   failed        → red error variant
+ *
+ * The 'refreshing' phase awaits refetchQueries() on every cache that
+ * could be affected, so by the time the green banner appears the
+ * inventory / COGS / dashboard tables have new data ready to render.
  */
 
 import { useEffect, useState, useRef } from 'react';
@@ -49,26 +55,47 @@ const QUIET_TIMEOUT_MS = 30_000;
 /** How long the green 'Synced' confirmation stays before fading. */
 const SUCCESS_DISPLAY_MS = 4_000;
 
+type Phase = 'idle' | 'in-progress' | 'refreshing' | 'success' | 'failed';
+
 export function SyncProgressBanner() {
   const queryClient = useQueryClient();
   const { socket } = useSocket();
 
   // Latest progress event for live display.
   const [latest, setLatest] = useState<SyncProgressEvent | null>(null);
-  // 'idle' | 'in-progress' | 'success' | 'failed'
-  const [phase, setPhase] = useState<'idle' | 'in-progress' | 'success' | 'failed'>('idle');
+  const [phase, setPhase] = useState<Phase>('idle');
   const lastProgressAtRef = useRef<number>(0);
+  /** Guard against double-firing finishSync from both the watchdog and an explicit complete event. */
+  const finishingRef = useRef<boolean>(false);
 
-  /** Mark sync done, invalidate caches, brief success display. */
-  const finishSync = (kind: 'success' | 'failed') => {
-    setPhase(kind);
-    // Refresh every page that could be showing stale data.
-    for (const key of SYNC_AFFECTED_QUERY_KEYS) {
-      void queryClient.invalidateQueries({ queryKey: key });
+  /**
+   * Worker is done. Refetch all sync-affected queries and only switch
+   * to the 'success' state once they've returned fresh data, so the
+   * green ✓ banner can't appear before the table is actually populated.
+   */
+  const finishSync = async (kind: 'success' | 'failed') => {
+    if (finishingRef.current) return;
+    finishingRef.current = true;
+
+    if (kind === 'success') {
+      // Show 'refreshing' UI while we wait for data to arrive
+      setPhase('refreshing');
+      try {
+        await Promise.all(
+          SYNC_AFFECTED_QUERY_KEYS.map((key) =>
+            queryClient.refetchQueries({ queryKey: key }).catch(() => undefined)
+          )
+        );
+      } catch {
+        // Even if refetch fails, we still want to clear the banner.
+      }
     }
+
+    setPhase(kind);
     setTimeout(() => {
       setPhase('idle');
       setLatest(null);
+      finishingRef.current = false;
     }, SUCCESS_DISPLAY_MS);
   };
 
@@ -79,16 +106,17 @@ export function SyncProgressBanner() {
       lastProgressAtRef.current = Date.now();
       setLatest(event);
 
-      // Explicit terminal events from initial-sync orchestrator
+      // Explicit terminal events from the initial-sync orchestrator
       if (event.stage === 'complete') {
-        finishSync('success');
+        void finishSync('success');
         return;
       }
       if (event.stage === 'failed' || event.type === 'sync:error') {
-        finishSync('failed');
+        void finishSync('failed');
         return;
       }
-      // Otherwise we're mid-flight
+      // Otherwise we're mid-flight — only flip to in-progress if not already
+      // in a finishing state (refreshing/success/failed).
       setPhase((prev) => (prev === 'idle' ? 'in-progress' : prev));
     };
     socket.on('sync:progress', handler);
@@ -106,7 +134,7 @@ export function SyncProgressBanner() {
     const interval = setInterval(() => {
       const elapsed = Date.now() - lastProgressAtRef.current;
       if (elapsed > QUIET_TIMEOUT_MS) {
-        finishSync('success');
+        void finishSync('success');
       }
     }, 5_000);
     return () => clearInterval(interval);
@@ -150,14 +178,28 @@ export function SyncProgressBanner() {
     );
   }
 
-  // ── Variant: in progress ─────────────────────────────────────────────────
+  // ── Variant: in progress OR refreshing ───────────────────────────────────
+  // Both look the same (blue spinner banner) but the labels and helper
+  // text differ so the user knows we're now waiting for the page to
+  // populate, not for Takealot.
+  const isRefreshing = phase === 'refreshing';
+
   const stage = latest?.stage;
-  const stageLabel = stage ? (STAGE_LABELS[stage] ?? 'Syncing your data') : 'Syncing your data';
-  const message = latest?.message ?? 'Connecting to Takealot…';
+  const stageLabel = isRefreshing
+    ? 'Refreshing your dashboard'
+    : stage
+      ? (STAGE_LABELS[stage] ?? 'Syncing your data')
+      : 'Syncing your data';
+  const message = isRefreshing
+    ? 'Loading the new data into the dashboard, inventory and COGS pages…'
+    : (latest?.message ?? 'Connecting to Takealot…');
   const completed = latest?.completed;
   const total = latest?.total;
   const showProgressBar =
-    typeof completed === 'number' && typeof total === 'number' && total > 0;
+    !isRefreshing &&
+    typeof completed === 'number' &&
+    typeof total === 'number' &&
+    total > 0;
   const pct = showProgressBar ? Math.min(100, Math.round((completed! / total!) * 100)) : 0;
 
   return (
@@ -192,8 +234,9 @@ export function SyncProgressBanner() {
         </div>
 
         <p className="text-xs text-blue-600/80">
-          Hang tight — your dashboard, inventory and COGS pages will populate
-          as data arrives. They'll refresh automatically when the sync finishes.
+          {isRefreshing
+            ? 'Almost done — pages will update as soon as the new data is loaded.'
+            : "Hang tight — your dashboard, inventory and COGS pages will populate as data arrives. They'll refresh automatically when the sync finishes."}
         </p>
       </div>
     </div>
