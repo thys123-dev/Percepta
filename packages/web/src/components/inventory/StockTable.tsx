@@ -281,6 +281,9 @@ export function StockTable() {
                               </div>
                               <div className="text-xs text-gray-400">
                                 {row.sku ?? `ID: ${row.offerId}`}
+                                {row.tsin && (
+                                  <span className="ml-1.5 text-gray-300">· TSIN {row.tsin}</span>
+                                )}
                               </div>
                             </div>
                           </td>

@@ -116,6 +116,7 @@ export async function inventoryRoutes(server: FastifyInstance) {
       db
         .select({
           offerId: schema.offers.offerId,
+          tsin: schema.offers.tsin,
           title: schema.offers.title,
           sku: schema.offers.sku,
           stockJhb: schema.offers.stockJhb,
@@ -148,6 +149,7 @@ export async function inventoryRoutes(server: FastifyInstance) {
 
       return {
         offerId: r.offerId,
+        tsin: r.tsin ?? null,
         title: r.title ?? 'Unknown Product',
         sku: r.sku ?? null,
         stockJhb: jhb,

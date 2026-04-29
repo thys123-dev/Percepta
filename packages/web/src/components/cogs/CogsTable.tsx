@@ -233,6 +233,9 @@ export function CogsTable() {
                               </div>
                               <div className="text-xs text-gray-400">
                                 {offer.sku ?? `ID: ${offer.offerId}`}
+                                {offer.tsin && (
+                                  <span className="ml-1.5 text-gray-300">· TSIN {offer.tsin}</span>
+                                )}
                                 {offer.category && ` · ${offer.category}`}
                               </div>
                             </div>

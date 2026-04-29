@@ -362,6 +362,7 @@ export async function sellerRoutes(server: FastifyInstance) {
       db
         .select({
           offerId: schema.offers.offerId,
+          tsin: schema.offers.tsin,
           title: schema.offers.title,
           sku: schema.offers.sku,
           category: schema.offers.category,

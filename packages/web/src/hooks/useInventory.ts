@@ -18,6 +18,8 @@ export type StockCoverStatus = 'healthy' | 'low' | 'critical';
 
 export interface StockRow {
   offerId: number;
+  /** Takealot's catalogue product ID — shared across sellers listing the same product. */
+  tsin: number | null;
   title: string;
   sku: string | null;
   stockJhb: number;
