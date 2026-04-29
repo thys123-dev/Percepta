@@ -6,13 +6,15 @@
  */
 
 import { useState, useCallback } from 'react';
-import { Search, AlertTriangle, ChevronLeft, ChevronRight, Loader2, ArrowUpDown } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Search, AlertTriangle, ChevronLeft, ChevronRight, Loader2, ArrowUpDown, RefreshCw } from 'lucide-react';
 import {
   useInventoryStock,
   type StockSortKey,
   type StockStatusFilter,
 } from '../../hooks/useInventory.js';
 import { formatCurrency } from '../../utils/format.js';
+import { apiClient } from '../../services/api.js';
 import { clsx } from 'clsx';
 
 // =============================================================================
@@ -64,6 +66,7 @@ const STATUS_OPTIONS: { key: StockStatusFilter; label: string }[] = [
 // =============================================================================
 
 export function StockTable() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -75,6 +78,15 @@ export function StockTable() {
     setStatusFilter(next);
     setPage(1);
   };
+
+  // Manual "fetch disabled offers" — separate from regular sync because
+  // disabled offers are heavy and most sellers don't need them.
+  const syncDisabledMutation = useMutation({
+    mutationFn: () => apiClient.post('/sync/offers/disabled').then((r) => r.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['inventory-stock'] });
+    },
+  });
 
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value);
@@ -107,6 +119,15 @@ export function StockTable() {
   const rows = data?.data ?? [];
   const pagination = data?.pagination;
 
+  // Show the "Sync disabled offers" CTA when the user is looking at
+  // disabled (or all) offers AND we appear to have none — likely because
+  // they've never run the disabled sync.
+  const showSyncDisabledCta =
+    !isLoading &&
+    rows.length === 0 &&
+    !debouncedSearch &&
+    (statusFilter === 'disabled' || statusFilter === 'all');
+
   return (
     <div className="space-y-4">
       {/* Status filter row */}
@@ -131,7 +152,33 @@ export function StockTable() {
             ({data.pagination.totalItems.toLocaleString()} {statusFilter === 'all' ? 'total' : statusFilter})
           </span>
         )}
+
+        {/* Manual disabled-sync trigger — pushed to the right */}
+        <div className="ml-auto">
+          <button
+            type="button"
+            onClick={() => syncDisabledMutation.mutate()}
+            disabled={syncDisabledMutation.isPending}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60"
+            title="Pull disabled / paused offers from Takealot. Regular sync skips these to keep things fast."
+          >
+            {syncDisabledMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            {syncDisabledMutation.isSuccess ? 'Sync started — refresh in ~1 min' : 'Sync disabled offers'}
+          </button>
+        </div>
       </div>
+
+      {/* Banner when user is looking at disabled tab and we have nothing */}
+      {showSyncDisabledCta && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          No disabled offers in the database yet. The default sync skips them.
+          Click <strong>Sync disabled offers</strong> above to pull them from Takealot.
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -30,7 +30,14 @@ export interface InitialSyncJobData {
 
 export interface SyncOffersJobData {
   sellerId: string;
-  triggeredBy: 'initial-sync' | 'daily-sync' | 'manual';
+  triggeredBy: 'initial-sync' | 'daily-sync' | 'manual' | 'manual-disabled';
+  /**
+   * When true, disabled offers are upserted as well. Defaults to false so
+   * that initial-sync and daily-sync stay focused on what the seller can
+   * actually sell. Existing disabled offers in the DB are left untouched
+   * either way — this flag only controls whether the sync writes them.
+   */
+  includeDisabled?: boolean;
 }
 
 export interface SyncSalesJobData {

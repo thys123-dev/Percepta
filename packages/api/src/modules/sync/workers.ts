@@ -67,7 +67,9 @@ export function startWorkers() {
   );
 
   syncOffersWorker.on('completed', (job, result) => {
-    console.info(`[sync-offers] ✓ Seller ${job.data.sellerId}: ${result.syncedCount} offers`);
+    const skipped = (result as { skippedDisabled?: number }).skippedDisabled ?? 0;
+    const tail = skipped > 0 ? ` (${skipped} disabled skipped)` : '';
+    console.info(`[sync-offers] ✓ Seller ${job.data.sellerId}: ${result.syncedCount} offers${tail}`);
   });
 
   syncOffersWorker.on('failed', (job, err) => {

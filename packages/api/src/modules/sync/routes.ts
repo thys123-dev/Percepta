@@ -10,7 +10,7 @@ import type { FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
 import { authenticate } from '../../middleware/auth.js';
-import { initialSyncQueue } from './queues.js';
+import { initialSyncQueue, syncOffersQueue } from './queues.js';
 import { getSellerClient } from './utils/get-seller-client.js';
 
 export async function syncRoutes(server: FastifyInstance) {
@@ -109,6 +109,55 @@ export async function syncRoutes(server: FastifyInstance) {
     return {
       success: true,
       message: 'Sync started. You will see updates in real-time on your dashboard.',
+    };
+  });
+
+  // POST /api/sync/offers/disabled
+  // One-shot sync that ALSO upserts disabled offers. Default sync skips
+  // them to keep the inventory page focused on active listings; this
+  // endpoint exists for sellers who want their full catalogue (including
+  // paused/disabled SKUs) in the database for COGS or historical analysis.
+  server.post('/offers/disabled', { preHandler: [authenticate] }, async (request, reply) => {
+    const { sellerId } = request.user as { sellerId: string };
+
+    // Confirm the seller has a connected API key before queuing
+    const [seller] = await db
+      .select({ apiKeyEnc: schema.sellers.apiKeyEnc })
+      .from(schema.sellers)
+      .where(eq(schema.sellers.id, sellerId))
+      .limit(1);
+
+    if (!seller?.apiKeyEnc) {
+      return reply.status(400).send({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: 'No Takealot API key connected. Please connect your API key first.',
+      });
+    }
+
+    // Clear any in-flight job for the same seller to avoid jobId dedup
+    // blocking us if the previous attempt stalled.
+    const jobId = `sync-offers-disabled-${sellerId}`;
+    const existing = await syncOffersQueue.getJob(jobId);
+    if (existing) {
+      await existing.remove().catch((err: Error) => {
+        request.log.warn({ err, jobId }, 'Failed to remove existing disabled-sync job');
+      });
+    }
+
+    await syncOffersQueue.add(
+      'sync-offers-disabled',
+      { sellerId, triggeredBy: 'manual-disabled', includeDisabled: true },
+      {
+        jobId,
+        removeOnComplete: { count: 10, age: 24 * 60 * 60 },
+        removeOnFail: { count: 50, age: 7 * 24 * 60 * 60 },
+      }
+    );
+
+    return {
+      success: true,
+      message: 'Disabled offer sync started. This may take a few minutes for large catalogues.',
     };
   });
 

@@ -43,15 +43,27 @@ function classifyWeightTier(weightGrams: number): string {
 
 // ---- Main Processor ----
 
-export async function processSyncOffers(job: Job<SyncOffersJobData>): Promise<{ syncedCount: number }> {
-  const { sellerId } = job.data;
+/**
+ * True if the offer is in any "Disabled by ..." status. Takealot returns
+ * exact strings like "Disabled by Seller" or "Disabled by Takealot" — we
+ * match case-insensitively and on substring so future variants still skip.
+ */
+function isDisabledOffer(offer: TakealotOffer): boolean {
+  return typeof offer.status === 'string' && /disabled/i.test(offer.status);
+}
+
+export async function processSyncOffers(job: Job<SyncOffersJobData>): Promise<{ syncedCount: number; skippedDisabled: number }> {
+  const { sellerId, includeDisabled = false } = job.data;
   let syncedCount = 0;
+  let skippedDisabled = 0;
 
   await publishProgress({
     type: 'sync:progress',
     sellerId,
     stage: 'offers',
-    message: 'Fetching your products from Takealot...',
+    message: includeDisabled
+      ? 'Fetching all products (including disabled) from Takealot...'
+      : 'Fetching your active products from Takealot...',
     completed: 0,
     total: 0,
   });
@@ -59,7 +71,11 @@ export async function processSyncOffers(job: Job<SyncOffersJobData>): Promise<{ 
   try {
     const client = await getSellerClient(sellerId);
 
-    // Stream offers page by page
+    // Stream offers page by page. The /v2/offers endpoint has no status
+    // filter, so we always pull every page from Takealot — but we filter
+    // out disabled offers BEFORE upserting unless includeDisabled is on.
+    // This keeps the offers table free of dead listings while still being
+    // honest about the API call cost.
     for await (const offersBatch of client.fetchAllOffers(
       async (completed, total) => {
         await job.updateProgress?.(Math.floor((completed / total) * 50)); // 0–50%
@@ -73,20 +89,34 @@ export async function processSyncOffers(job: Job<SyncOffersJobData>): Promise<{ 
         });
       }
     )) {
-      await upsertOffersBatch(sellerId, offersBatch);
-      syncedCount += offersBatch.length;
+      const filtered = includeDisabled
+        ? offersBatch
+        : offersBatch.filter((o) => {
+            if (isDisabledOffer(o)) {
+              skippedDisabled++;
+              return false;
+            }
+            return true;
+          });
+      await upsertOffersBatch(sellerId, filtered);
+      syncedCount += filtered.length;
     }
+
+    const summary = includeDisabled
+      ? `✓ ${syncedCount} products synced`
+      : `✓ ${syncedCount} active products synced` +
+        (skippedDisabled > 0 ? ` (${skippedDisabled} disabled skipped)` : '');
 
     await publishProgress({
       type: 'sync:progress',
       sellerId,
       stage: 'offers',
-      message: `✓ ${syncedCount} products synced`,
+      message: summary,
       completed: syncedCount,
       total: syncedCount,
     });
 
-    return { syncedCount };
+    return { syncedCount, skippedDisabled };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     await publishProgress({
