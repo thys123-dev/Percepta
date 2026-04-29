@@ -372,6 +372,7 @@ export async function sellerRoutes(server: FastifyInstance) {
           inboundCostCents: schema.offers.inboundCostCents,
           salesUnits30d: schema.offers.salesUnits30d,
           stockCoverDays: schema.offers.stockCoverDays,
+          offerUrl: schema.offers.offerUrl,
         })
         .from(schema.offers)
         .where(where)

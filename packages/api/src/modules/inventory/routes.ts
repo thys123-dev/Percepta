@@ -127,6 +127,7 @@ export async function inventoryRoutes(server: FastifyInstance) {
           sellingPriceCents: schema.offers.sellingPriceCents,
           status: schema.offers.status,
           leadtimeDays: schema.offers.leadtimeDays,
+          offerUrl: schema.offers.offerUrl,
         })
         .from(schema.offers)
         .where(where)
@@ -150,6 +151,7 @@ export async function inventoryRoutes(server: FastifyInstance) {
       return {
         offerId: r.offerId,
         tsin: r.tsin ?? null,
+        offerUrl: r.offerUrl ?? null,
         title: r.title ?? 'Unknown Product',
         sku: r.sku ?? null,
         stockJhb: jhb,

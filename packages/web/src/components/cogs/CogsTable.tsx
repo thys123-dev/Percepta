@@ -237,11 +237,14 @@ export function CogsTable() {
                                   <>
                                     <span className="mx-1.5 text-gray-300">·</span>
                                     <a
-                                      href={`https://www.takealot.com/all?qsearch=${offer.tsin}`}
+                                      href={
+                                        offer.offerUrl
+                                          ?? `https://www.takealot.com/all?qsearch=${encodeURIComponent(offer.title ?? String(offer.tsin))}`
+                                      }
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="inline-flex items-center gap-0.5 text-brand-600 underline decoration-dotted decoration-brand-300 underline-offset-2 hover:text-brand-700 hover:decoration-brand-600 hover:decoration-solid"
-                                      title="Open this product on Takealot"
+                                      title={offer.offerUrl ? 'Open this product on Takealot' : 'Search Takealot for this product (run a sync to enable direct linking)'}
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       TSIN {offer.tsin}

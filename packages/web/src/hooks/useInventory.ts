@@ -20,6 +20,8 @@ export interface StockRow {
   offerId: number;
   /** Takealot's catalogue product ID — shared across sellers listing the same product. */
   tsin: number | null;
+  /** Direct Takealot product URL captured during sync (e.g. https://www.takealot.com/x/PLID...) */
+  offerUrl: string | null;
   title: string;
   sku: string | null;
   stockJhb: number;

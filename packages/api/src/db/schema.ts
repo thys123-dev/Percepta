@@ -69,6 +69,8 @@ export const offers = pgTable(
     sellingPriceCents: integer('selling_price_cents'),
     rrpCents: integer('rrp_cents'),
     status: varchar('status', { length: 50 }),
+    /** Direct Takealot product URL captured from /v2/offers (e.g. https://www.takealot.com/x/PLID...) */
+    offerUrl: text('offer_url'),
 
     // Dimensions for fee calculation
     weightGrams: integer('weight_grams'),
