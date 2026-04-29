@@ -211,14 +211,23 @@ export async function sellerRoutes(server: FastifyInstance) {
 
   // ---------------------------------------------------------------------------
   // GET /api/sellers/offers — Paginated offer list for COGS management
+  //
+  // Always excludes offers in any 'Disabled by ...' status. Showing
+  // disabled SKUs on the COGS screen confuses sellers — they don't want
+  // to set costs on products they've paused. The Inventory page exposes
+  // them via its 'Disabled' status filter for sellers who want to see
+  // the full catalogue.
   // ---------------------------------------------------------------------------
   server.get('/offers', { preHandler: [authenticate] }, async (request) => {
     const { sellerId } = request.user as { sellerId: string };
     const params = offerListQuerySchema.parse(request.query);
     const offset = (params.page - 1) * params.limit;
 
-    // Build WHERE: seller filter + optional text search
-    const conditions: ReturnType<typeof eq>[] = [eq(schema.offers.sellerId, sellerId)];
+    // Build WHERE: seller filter + active-only + optional text search
+    const conditions: ReturnType<typeof eq>[] = [
+      eq(schema.offers.sellerId, sellerId),
+      sql`(${schema.offers.status} IS NULL OR ${schema.offers.status} NOT ILIKE '%disabled%')` as unknown as ReturnType<typeof eq>,
+    ];
     if (params.search) {
       conditions.push(
         sql`(${schema.offers.title} ILIKE ${`%${params.search}%`} OR ${schema.offers.sku} ILIKE ${`%${params.search}%`})` as unknown as ReturnType<typeof eq>
@@ -289,7 +298,13 @@ export async function sellerRoutes(server: FastifyInstance) {
         inboundCostCents: schema.offers.inboundCostCents,
       })
       .from(schema.offers)
-      .where(eq(schema.offers.sellerId, sellerId))
+      .where(
+        and(
+          eq(schema.offers.sellerId, sellerId),
+          // Match the COGS list endpoint: only active products in the template.
+          sql`(${schema.offers.status} IS NULL OR ${schema.offers.status} NOT ILIKE '%disabled%')`
+        )
+      )
       .orderBy(desc(schema.offers.salesUnits30d));
 
     const header = 'offer_id,sku,title,current_price_rands,cogs_rands,inbound_cost_rands\n';
@@ -325,7 +340,13 @@ export async function sellerRoutes(server: FastifyInstance) {
         inboundCostCents: schema.offers.inboundCostCents,
       })
       .from(schema.offers)
-      .where(eq(schema.offers.sellerId, sellerId))
+      .where(
+        and(
+          eq(schema.offers.sellerId, sellerId),
+          // Match the COGS list endpoint: only active products in the template.
+          sql`(${schema.offers.status} IS NULL OR ${schema.offers.status} NOT ILIKE '%disabled%')`
+        )
+      )
       .orderBy(desc(schema.offers.salesUnits30d));
 
     const workbook = new ExcelJS.Workbook();
