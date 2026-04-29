@@ -121,10 +121,13 @@ export function StockTable() {
 
   // Show the "Sync disabled offers" CTA when the user is looking at
   // disabled (or all) offers AND we appear to have none — likely because
-  // they've never run the disabled sync.
+  // they've never run the disabled sync. Check pagination.totalItems too,
+  // not just rows.length, so a stale page render with old data doesn't
+  // re-trigger the banner after a successful sync.
   const showSyncDisabledCta =
     !isLoading &&
     rows.length === 0 &&
+    (data?.pagination?.totalItems ?? 0) === 0 &&
     !debouncedSearch &&
     (statusFilter === 'disabled' || statusFilter === 'all');
 

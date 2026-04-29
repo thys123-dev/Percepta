@@ -1,25 +1,27 @@
 /**
  * SyncProgressBanner — global "we're syncing your Takealot data" banner
  *
- * Displays at the top of every dashboard page whenever the backend reports
- * that an initial-sync, sync-offers, sync-sales or calculate-profits job
- * is running for this seller. Listens to live progress messages over the
- * existing Socket.io 'sync:progress' channel so the banner can show
- * "Fetching products… 200 of 766" rather than a static spinner.
+ * Displays at the top of every dashboard page whenever a sync job is
+ * actively publishing progress. Listens to the Socket.io 'sync:progress'
+ * channel directly so it works for ALL sync flows:
+ *   - Initial sync (on first connect)
+ *   - Manual "Sync now" button
+ *   - "Sync disabled offers" button on the inventory page
+ *   - Daily reconciliation
  *
- * Sources of truth:
- *   - useSyncStatus       → backend status (syncing | pending+queued | …)
- *   - Socket.io 'sync:progress' → fine-grained per-page progress updates
- *
- * The banner self-hides once the backend transitions to 'complete' or
- * 'failed', and shows a brief "✓ Sync complete" confirmation for a few
- * seconds before fading out.
+ * The banner self-hides 30 seconds after the last progress event (worker
+ * has gone quiet → assume done) OR immediately on an explicit
+ * 'complete' / 'failed' event. On hide, it invalidates every cached
+ * query that could be affected by the sync so the dashboard,
+ * inventory and COGS pages re-fetch with fresh data — no manual
+ * refresh required.
  */
 
 import { useEffect, useState, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useSyncStatus, type SyncProgressEvent } from '../../hooks/useSyncStatus.js';
+import { type SyncProgressEvent } from '../../hooks/useSyncStatus.js';
 import { useSocket } from '../../hooks/useSocket.js';
 
 const STAGE_LABELS: Record<string, string> = {
@@ -30,53 +32,91 @@ const STAGE_LABELS: Record<string, string> = {
   failed:   'Sync failed',
 };
 
-export function SyncProgressBanner() {
-  const { data: syncStatus } = useSyncStatus();
-  const { socket } = useSocket();
-  const [latest, setLatest] = useState<SyncProgressEvent | null>(null);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const previousStatusRef = useRef<string | undefined>(syncStatus?.status);
+/** Caches that can be affected by any sync job. */
+const SYNC_AFFECTED_QUERY_KEYS: string[][] = [
+  ['inventory-stock'],
+  ['offer-list'],
+  ['dashboard-summary'],
+  ['products'],
+  ['fee-summary'],
+  ['revenue-target'],
+  ['sync-status'],
+  ['alerts'],
+];
 
-  // Listen for live progress events from the sync workers
+/** Time after the last progress event when we assume the worker is done. */
+const QUIET_TIMEOUT_MS = 30_000;
+/** How long the green 'Synced' confirmation stays before fading. */
+const SUCCESS_DISPLAY_MS = 4_000;
+
+export function SyncProgressBanner() {
+  const queryClient = useQueryClient();
+  const { socket } = useSocket();
+
+  // Latest progress event for live display.
+  const [latest, setLatest] = useState<SyncProgressEvent | null>(null);
+  // 'idle' | 'in-progress' | 'success' | 'failed'
+  const [phase, setPhase] = useState<'idle' | 'in-progress' | 'success' | 'failed'>('idle');
+  const lastProgressAtRef = useRef<number>(0);
+
+  /** Mark sync done, invalidate caches, brief success display. */
+  const finishSync = (kind: 'success' | 'failed') => {
+    setPhase(kind);
+    // Refresh every page that could be showing stale data.
+    for (const key of SYNC_AFFECTED_QUERY_KEYS) {
+      void queryClient.invalidateQueries({ queryKey: key });
+    }
+    setTimeout(() => {
+      setPhase('idle');
+      setLatest(null);
+    }, SUCCESS_DISPLAY_MS);
+  };
+
+  // Listen for live progress events
   useEffect(() => {
     if (!socket) return;
-    const handler = (event: SyncProgressEvent) => setLatest(event);
+    const handler = (event: SyncProgressEvent) => {
+      lastProgressAtRef.current = Date.now();
+      setLatest(event);
+
+      // Explicit terminal events from initial-sync orchestrator
+      if (event.stage === 'complete') {
+        finishSync('success');
+        return;
+      }
+      if (event.stage === 'failed' || event.type === 'sync:error') {
+        finishSync('failed');
+        return;
+      }
+      // Otherwise we're mid-flight
+      setPhase((prev) => (prev === 'idle' ? 'in-progress' : prev));
+    };
     socket.on('sync:progress', handler);
     return () => {
       socket.off('sync:progress', handler);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket]);
 
-  // Detect transition syncing → complete to show a 'Synced' confirmation
+  // Watchdog: if we've been in-progress with no progress event for 30s,
+  // assume the worker quietly finished (this also covers standalone
+  // sync-offers jobs which don't emit a 'complete' stage event).
   useEffect(() => {
-    const prev = previousStatusRef.current;
-    const curr = syncStatus?.status;
-    if ((prev === 'syncing' || prev === 'pending') && curr === 'complete') {
-      setShowSuccess(true);
-      const t = setTimeout(() => {
-        setShowSuccess(false);
-        setLatest(null);
-      }, 4000);
-      previousStatusRef.current = curr;
-      return () => clearTimeout(t);
-    }
-    previousStatusRef.current = curr;
-  }, [syncStatus?.status]);
+    if (phase !== 'in-progress') return;
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - lastProgressAtRef.current;
+      if (elapsed > QUIET_TIMEOUT_MS) {
+        finishSync('success');
+      }
+    }, 5_000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
-  // What we render is decided by these flags. Banner is shown whenever
-  // ANY of (a) status reports active syncing, (b) we just transitioned
-  // to complete (showSuccess), or (c) status is failed.
-  const backendBusy =
-    syncStatus?.status === 'syncing' ||
-    (syncStatus?.status === 'pending' && syncStatus?.isQueued === true);
-  const hasFailed = syncStatus?.status === 'failed';
-
-  if (!backendBusy && !showSuccess && !hasFailed) {
-    return null;
-  }
+  if (phase === 'idle') return null;
 
   // ── Variant: success ─────────────────────────────────────────────────────
-  if (showSuccess && !backendBusy) {
+  if (phase === 'success') {
     return (
       <div
         role="status"
@@ -91,7 +131,7 @@ export function SyncProgressBanner() {
   }
 
   // ── Variant: failed ──────────────────────────────────────────────────────
-  if (hasFailed) {
+  if (phase === 'failed') {
     return (
       <div
         role="alert"
@@ -153,7 +193,7 @@ export function SyncProgressBanner() {
 
         <p className="text-xs text-blue-600/80">
           Hang tight — your dashboard, inventory and COGS pages will populate
-          as data arrives.
+          as data arrives. They'll refresh automatically when the sync finishes.
         </p>
       </div>
     </div>
