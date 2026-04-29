@@ -9,7 +9,7 @@ import { encrypt } from '../../config/encryption.js';
 import { initialSyncQueue, calculateProfitsQueue } from '../sync/queues.js';
 import { env } from '../../config/env.js';
 import ExcelJS from 'exceljs';
-import { cacheGet, cacheSet } from '../sync/redis.js';
+import { cacheGet, cacheSet, cacheInvalidate } from '../sync/redis.js';
 
 const CACHE_TTL_SECONDS = 5 * 60; // 5 minutes
 
@@ -155,6 +155,121 @@ export async function sellerRoutes(server: FastifyInstance) {
     return {
       success: true,
       message: 'API key validated. Your data sync has started — this takes 2-5 minutes.',
+    };
+  });
+
+  // POST /api/sellers/reset-data
+  // Wipes all synced/derived data for the authenticated seller (offers,
+  // orders, profit calcs, fees, alerts, etc.) and resets sync status to
+  // 'pending'. Keeps the seller account, login credentials, and the
+  // stored API key intact so the next "Sync now" works without
+  // reconnecting. Intended for QA / re-sync testing — sellers can use
+  // this to start over without creating a new account.
+  //
+  // Requires {confirm: true} in the body to prevent accidental wipes.
+  server.post('/reset-data', { preHandler: [authenticate] }, async (request, reply) => {
+    const { sellerId } = request.user as { sellerId: string };
+    const { confirm } = z.object({ confirm: z.literal(true) }).parse(request.body);
+    if (!confirm) {
+      return reply.status(400).send({ error: 'confirm: true is required in the body' });
+    }
+
+    const counts: Record<string, number> = {};
+    const wipe = async (
+      label: string,
+      del: () => Promise<{ id: string }[]>,
+    ): Promise<void> => {
+      try {
+        const result = await del();
+        counts[label] = result.length;
+      } catch (err) {
+        request.log.error({ err, table: label }, 'reset-data: delete failed');
+        counts[label] = -1;
+      }
+    };
+
+    // Order matters: child tables before parents to keep FK behaviour
+    // predictable even though cascades exist.
+    await wipe('profitCalculations', () =>
+      db.delete(schema.profitCalculations)
+        .where(eq(schema.profitCalculations.sellerId, sellerId))
+        .returning({ id: schema.profitCalculations.id })
+    );
+    await wipe('calculatedFees', () =>
+      db.delete(schema.calculatedFees)
+        .where(eq(schema.calculatedFees.sellerId, sellerId))
+        .returning({ id: schema.calculatedFees.id })
+    );
+    await wipe('feeDiscrepancies', () =>
+      db.delete(schema.feeDiscrepancies)
+        .where(eq(schema.feeDiscrepancies.sellerId, sellerId))
+        .returning({ id: schema.feeDiscrepancies.id })
+    );
+    await wipe('accountTransactions', () =>
+      db.delete(schema.accountTransactions)
+        .where(eq(schema.accountTransactions.sellerId, sellerId))
+        .returning({ id: schema.accountTransactions.id })
+    );
+    await wipe('accountTransactionImports', () =>
+      db.delete(schema.accountTransactionImports)
+        .where(eq(schema.accountTransactionImports.sellerId, sellerId))
+        .returning({ id: schema.accountTransactionImports.id })
+    );
+    await wipe('salesReportImports', () =>
+      db.delete(schema.salesReportImports)
+        .where(eq(schema.salesReportImports.sellerId, sellerId))
+        .returning({ id: schema.salesReportImports.id })
+    );
+    await wipe('webhookEvents', () =>
+      db.delete(schema.webhookEvents)
+        .where(eq(schema.webhookEvents.sellerId, sellerId))
+        .returning({ id: schema.webhookEvents.id })
+    );
+    await wipe('alerts', () =>
+      db.delete(schema.alerts)
+        .where(eq(schema.alerts.sellerId, sellerId))
+        .returning({ id: schema.alerts.id })
+    );
+    await wipe('sellerCosts', () =>
+      db.delete(schema.sellerCosts)
+        .where(eq(schema.sellerCosts.sellerId, sellerId))
+        .returning({ id: schema.sellerCosts.id })
+    );
+    await wipe('orders', () =>
+      db.delete(schema.orders)
+        .where(eq(schema.orders.sellerId, sellerId))
+        .returning({ id: schema.orders.id })
+    );
+    await wipe('offers', () =>
+      db.delete(schema.offers)
+        .where(eq(schema.offers.sellerId, sellerId))
+        .returning({ id: schema.offers.id })
+    );
+
+    // Reset seller's sync status, but KEEP apiKey, email, businessName,
+    // onboardingComplete etc. so they're still logged in and can sync.
+    await db
+      .update(schema.sellers)
+      .set({
+        initialSyncStatus: 'pending',
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.sellers.id, sellerId));
+
+    // Wipe any cached aggregates so the dashboard reflects the empty state.
+    await Promise.allSettled([
+      cacheInvalidate(`dashboard:${sellerId}:*`),
+      cacheInvalidate(`inventory:${sellerId}:*`),
+      cacheInvalidate(`revenue-target:${sellerId}`),
+    ]);
+
+    request.log.info({ sellerId, counts }, 'reset-data: wiped seller data');
+
+    return {
+      success: true,
+      message:
+        'Data reset complete. Click "Sync now" on the dashboard to pull a fresh active-only sync.',
+      deleted: counts,
     };
   });
 
