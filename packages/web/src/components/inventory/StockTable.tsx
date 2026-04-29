@@ -288,7 +288,7 @@ export function StockTable() {
                                       href={`https://www.takealot.com/all?qsearch=${row.tsin}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-0.5 text-gray-400 hover:text-brand-600 hover:underline"
+                                      className="inline-flex items-center gap-0.5 text-brand-600 underline decoration-dotted decoration-brand-300 underline-offset-2 hover:text-brand-700 hover:decoration-brand-600 hover:decoration-solid"
                                       title="Open this product on Takealot"
                                       onClick={(e) => e.stopPropagation()}
                                     >
