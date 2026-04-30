@@ -301,7 +301,7 @@ export async function inventoryRoutes(server: FastifyInstance) {
     //    grab every return row for the orderIds on this page, then pick the
     //    latest by return_date per order in JS. ──
     const pageOrderIds = rows.map((r) => r.orderId).filter((id): id is number => id != null);
-    let returnsByOrderId = new Map<
+    const returnsByOrderId = new Map<
       number,
       {
         rrn: string;
@@ -373,6 +373,7 @@ export async function inventoryRoutes(server: FastifyInstance) {
         removalOrderNumber: enrichment?.removalOrderNumber ?? null,
         dateReadyToCollect: enrichment?.dateReadyToCollect?.toISOString() ?? null,
         dateAddedToStock: enrichment?.dateAddedToStock?.toISOString() ?? null,
+        returnDate: enrichment?.returnDate?.toISOString() ?? null,
       };
     });
 

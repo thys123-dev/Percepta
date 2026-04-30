@@ -101,6 +101,8 @@ export interface ReturnRow {
   removalOrderNumber: string | null;
   dateReadyToCollect: string | null;
   dateAddedToStock: string | null;
+  /** When the return / cancellation was logged at Takealot. */
+  returnDate: string | null;
 }
 
 export type ReturnsSortKey = 'order_date' | 'reversal_amount' | 'product_title';

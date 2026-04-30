@@ -10,7 +10,7 @@
  * a return reason badge, a stock-outcome dot, and a tooltip showing the customer's comment.
  */
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Loader2, ArrowUpDown, FileUp, MessageCircle } from 'lucide-react';
 import {
@@ -58,6 +58,48 @@ function StockOutcomeDot({ outcome }: { outcome: 'sellable' | 'removal_order' | 
       <span className={clsx('h-2 w-2 rounded-full', colour)} />
     </span>
   );
+}
+
+/**
+ * Renders the "Restocked" column value as a single line, uniform font.
+ *
+ *   removal_order     → "Awaiting collection 16 Apr 2026" (amber)
+ *   sellable + date   → "16 Apr 2026"
+ *   cancellation      → returnDate (the cancellation date — unit was never out of stock)
+ *   anything else     → "In Progress"
+ *
+ * Pending view keeps the original ship date.
+ */
+function renderRestockedCell(
+  row: import('../../hooks/useInventory.js').ReturnRow,
+  isPendingView: boolean
+): ReactNode {
+  if (isPendingView) {
+    return formatDate(row.dateShippedToCustomer);
+  }
+
+  if (row.stockOutcome === 'removal_order') {
+    return (
+      <span className="text-amber-700">
+        Awaiting collection {row.dateReadyToCollect ? formatDate(row.dateReadyToCollect) : ''}
+      </span>
+    );
+  }
+
+  if (row.dateAddedToStock) {
+    return formatDate(row.dateAddedToStock);
+  }
+
+  // Sellable + cancellation: unit never left stock; show the cancellation date.
+  if (
+    row.stockOutcome === 'sellable' &&
+    /cancellation/i.test(row.returnReason ?? '') &&
+    row.returnDate
+  ) {
+    return formatDate(row.returnDate);
+  }
+
+  return <span className="text-gray-500">In Progress</span>;
 }
 
 function StockOutcomeLegend() {
@@ -216,9 +258,9 @@ export function ReturnsTable() {
                 )}
                 <th
                   className="hidden px-4 py-3 sm:table-cell"
-                  title="Date the unit was added back to your sellable stock at Takealot. For removal orders this is blank — the unit isn't going back into stock."
+                  title="When the unit was returned to your sellable stock, or for removals, when it became available for collection at the DC."
                 >
-                  {isPendingView ? 'Shipped' : 'Stock In'}
+                  {isPendingView ? 'Shipped' : 'Restocked'}
                 </th>
               </tr>
             </thead>
@@ -323,37 +365,7 @@ export function ReturnsTable() {
                         )}
 
                         <td className="hidden px-4 py-3 text-gray-600 sm:table-cell">
-                          {isPendingView ? (
-                            // Pending view has no return record yet — show original ship date.
-                            formatDate(row.dateShippedToCustomer)
-                          ) : row.stockOutcome === 'sellable' ? (
-                            row.dateAddedToStock ? (
-                              formatDate(row.dateAddedToStock)
-                            ) : /cancellation/i.test(row.returnReason ?? '') ? (
-                              // Customer Cancellation: unit never physically left the DC.
-                              <div className="flex flex-col">
-                                <span className="text-gray-400">—</span>
-                                <span className="text-[10px] text-gray-500">Never shipped</span>
-                              </div>
-                            ) : (
-                              // Sellable but no date yet — Takealot is still processing the return.
-                              <div className="flex flex-col">
-                                <span className="text-gray-400">—</span>
-                                <span className="text-[10px] text-gray-500">Awaiting receipt</span>
-                              </div>
-                            )
-                          ) : row.stockOutcome === 'removal_order' ? (
-                            <div className="flex flex-col">
-                              <span className="text-gray-400">—</span>
-                              {row.dateReadyToCollect && (
-                                <span className="text-[10px] text-amber-600">
-                                  Ready: {formatDate(row.dateReadyToCollect)}
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-gray-300">—</span>
-                          )}
+                          {renderRestockedCell(row, isPendingView)}
                         </td>
                       </tr>
                     ))}
