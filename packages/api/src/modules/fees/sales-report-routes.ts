@@ -429,11 +429,14 @@ export async function salesReportRoutes(server: FastifyInstance) {
         totalOverchargedCents: sql<number>`COALESCE(SUM(CASE WHEN ${schema.feeDiscrepancies.discrepancyCents} > 0 THEN ${schema.feeDiscrepancies.discrepancyCents} ELSE 0 END), 0)::int`,
         totalUnderchargedCents: sql<number>`COALESCE(SUM(CASE WHEN ${schema.feeDiscrepancies.discrepancyCents} < 0 THEN ABS(${schema.feeDiscrepancies.discrepancyCents}) ELSE 0 END), 0)::int`,
         netImpactCents: sql<number>`COALESCE(SUM(${schema.feeDiscrepancies.discrepancyCents}), 0)::int`,
-        // discrepancyPct is decimal(7,2) — Postgres' ROUND(numeric, integer) works
-        // directly. An earlier ::float cast broke this because there's no
-        // ROUND(double precision, integer) overload, leaving the whole tab
-        // returning a 500.
-        avgDiscrepancyPct: sql<number>`ROUND(AVG(ABS(${schema.feeDiscrepancies.discrepancyPct})), 1)`,
+        // discrepancyPct is decimal(7,2). ROUND(numeric, integer) is the only
+        // overload Postgres ships, so we round the numeric *first* (an earlier
+        // ::float cast on the input crashed the query with "round(double
+        // precision, integer) does not exist"). Then cast to float so JSON
+        // serializes it as a number — node-postgres returns numerics as
+        // strings to preserve precision, which would break the frontend's
+        // .toFixed() call.
+        avgDiscrepancyPct: sql<number>`ROUND(AVG(ABS(${schema.feeDiscrepancies.discrepancyPct})), 1)::float`,
       })
       .from(schema.feeDiscrepancies)
       .innerJoin(schema.orders, eq(schema.feeDiscrepancies.orderId, schema.orders.id))
