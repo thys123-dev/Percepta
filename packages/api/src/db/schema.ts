@@ -86,6 +86,16 @@ export const offers = pgTable(
     cogsSource: varchar('cogs_source', { length: 20 }).default('estimate'),
     inboundCostCents: integer('inbound_cost_cents').default(0),
 
+    // From Takealot Product Details report (no API equivalent).
+    brand: varchar('brand', { length: 100 }),
+    /** Takealot's published success-fee rate for this product, in percent.
+     *  Derived from `Success Fee (In Stock) / Current Price`. When set, the
+     *  fee calculator uses this in preference to the category-table lookup. */
+    successFeeRatePct: decimal('success_fee_rate_pct', { precision: 7, scale: 4 }),
+    /** Takealot's published per-unit fulfilment fee for this product, in cents.
+     *  When set, used instead of the size×weight×category matrix lookup. */
+    fulfilmentFeeCents: integer('fulfilment_fee_cents'),
+
     // Stock (per-DC, matching bulk replenishment template layout: CPT, JHB, DBN)
     stockJhb: integer('stock_jhb').default(0),
     stockCpt: integer('stock_cpt').default(0),
@@ -462,6 +472,31 @@ export const sellerCosts = pgTable(
   },
   (table) => [
     uniqueIndex('seller_costs_unique_idx').on(table.sellerId, table.month, table.costType),
+  ]
+);
+
+// =============================================================================
+// product_details_imports — Tracks Product Details CSV uploads (audit ledger
+// only — values are written directly to columns on offers)
+// =============================================================================
+
+export const productDetailsImports = pgTable(
+  'product_details_imports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sellerId: uuid('seller_id')
+      .notNull()
+      .references(() => sellers.id, { onDelete: 'cascade' }),
+    fileName: varchar('file_name', { length: 255 }).notNull(),
+    rowCount: integer('row_count').notNull(),
+    matchedCount: integer('matched_count').default(0),
+    unmatchedCount: integer('unmatched_count').default(0),
+    status: varchar('status', { length: 20 }).default('pending'),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    index('product_details_imports_seller_idx').on(table.sellerId),
   ]
 );
 

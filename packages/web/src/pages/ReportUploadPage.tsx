@@ -3,16 +3,23 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { SalesReportUpload } from '../components/fees/SalesReportUpload';
 import { AccountTransactionUpload } from '../components/fees/AccountTransactionUpload';
 import { ReturnsImportUpload } from '../components/fees/ReturnsImportUpload';
+import { ProductDetailsUpload } from '../components/fees/ProductDetailsUpload';
 import { ImportHistoryList } from '../components/fees/ImportHistoryList';
 import { AccountTransactionHistory } from '../components/fees/AccountTransactionHistory';
 import { ReturnsImportHistory } from '../components/fees/ReturnsImportHistory';
 
-type Tab = 'upload' | 'acct-transactions' | 'returns-import' | 'history';
+type Tab =
+  | 'upload'
+  | 'acct-transactions'
+  | 'returns-import'
+  | 'product-details'
+  | 'history';
 
 const VALID_TABS: readonly Tab[] = [
   'upload',
   'acct-transactions',
   'returns-import',
+  'product-details',
   'history',
 ];
 
@@ -40,6 +47,7 @@ export function ReportUploadPage() {
     { key: 'upload', label: 'Sales Report' },
     { key: 'acct-transactions', label: 'Account Transactions' },
     { key: 'returns-import', label: 'Returns Export' },
+    { key: 'product-details', label: 'Product Details' },
     { key: 'history', label: 'Import History' },
   ];
 
@@ -83,6 +91,7 @@ export function ReportUploadPage() {
       )}
       {tab === 'acct-transactions' && <AccountTransactionUpload />}
       {tab === 'returns-import' && <ReturnsImportUpload />}
+      {tab === 'product-details' && <ProductDetailsUpload />}
       {tab === 'history' && (
         <div className="space-y-8">
           <div>

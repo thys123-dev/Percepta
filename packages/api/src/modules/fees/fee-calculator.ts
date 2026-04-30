@@ -42,6 +42,15 @@ export interface FeeOfferInput {
   volumeCm3: number | null;   // length × width × height in cm³
   weightGrams: number | null;
   stockCoverDays: number | null;
+  /** Takealot's published per-product success-fee rate (in %), if known.
+   *  When set, overrides the category-based table lookup — far more accurate
+   *  because the table groups very different sub-categories (phones vs tablets)
+   *  under one rate. Source: Product Details CSV. */
+  successFeeRatePct?: number | null;
+  /** Takealot's published per-unit fulfilment fee (in cents), if known.
+   *  When set, overrides the size×weight×category matrix lookup. Source:
+   *  Product Details CSV. */
+  fulfilmentFeeCents?: number | null;
 }
 
 /** Order data needed for fee calculation */
@@ -113,17 +122,25 @@ export function calculateFees(
   const quantity = order.quantity;
   const hasDimensions = offer.volumeCm3 !== null && offer.weightGrams !== null;
 
-  // 1. Success fee (percentage of VAT-incl. selling price)
-  const successFeeRatePct = getSuccessFeeRate(offer.category);
+  // 1. Success fee — prefer Takealot's published per-product rate (from
+  //    Product Details CSV) when available; fall back to the category table.
+  const successFeeRatePct =
+    offer.successFeeRatePct != null && offer.successFeeRatePct > 0
+      ? offer.successFeeRatePct
+      : getSuccessFeeRate(offer.category);
   const successFeePerUnitCents = Math.round(
     offer.sellingPriceCents * (successFeeRatePct / 100)
   );
 
-  // 2. Fulfilment fee (size × weight × category matrix, version selected by ship date)
+  // 2. Fulfilment fee — prefer Takealot's published per-product fee when
+  //    available; fall back to the size × weight × category matrix.
   const fulfilmentWeightTier = classifyFulfilmentWeight(offer.weightGrams);
   const fulfilmentSizeTier = classifyFulfilmentSize(offer.volumeCm3, offer.category);
   const feeMatrix = getFulfilmentMatrix(order.shipDate);
-  const fulfilmentFeePerUnitCents = feeMatrix[fulfilmentSizeTier][fulfilmentWeightTier];
+  const fulfilmentFeePerUnitCents =
+    offer.fulfilmentFeeCents != null && offer.fulfilmentFeeCents >= 0
+      ? offer.fulfilmentFeeCents
+      : feeMatrix[fulfilmentSizeTier][fulfilmentWeightTier];
 
   // 3. IBT penalty (only if fulfillment DC ≠ customer DC)
   const isIbt = detectIbt(order.fulfillmentDc, order.customerDc);

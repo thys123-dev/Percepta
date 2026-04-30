@@ -29,6 +29,7 @@ import { salesReportRoutes } from './modules/fees/sales-report-routes.js';
 import { accountTransactionRoutes } from './modules/fees/account-transaction-routes.js';
 import { inventoryRoutes } from './modules/inventory/routes.js';
 import { returnsRoutes } from './modules/returns/routes.js';
+import { productDetailsRoutes } from './modules/products/details-routes.js';
 import { emailRoutes } from './modules/email/routes.js';
 import { startWorkers } from './modules/sync/workers.js';
 import { setupSocketIO } from './modules/realtime/socket.js';
@@ -117,6 +118,7 @@ export async function buildServer() {
   await server.register(accountTransactionRoutes, { prefix: '/api/account-transactions' });
   await server.register(inventoryRoutes, { prefix: '/api/inventory' });
   await server.register(returnsRoutes, { prefix: '/api/returns' });
+  await server.register(productDetailsRoutes, { prefix: '/api/products' });
   await server.register(emailRoutes, { prefix: '/api/email' });
 
   // ── Serve frontend SPA in production ─────────────────────────────────

@@ -84,6 +84,9 @@ export async function processCalculateProfits(
       cogsSource: string | null;
       inboundCostCents: number | null;
       stockCoverDays: number | null;
+      /** Takealot's published rate from Product Details CSV (numeric → string here). */
+      successFeeRatePct: string | null;
+      fulfilmentFeeCents: number | null;
     }>();
 
     if (offerIds.length > 0) {
@@ -99,6 +102,8 @@ export async function processCalculateProfits(
           cogsSource: schema.offers.cogsSource,
           inboundCostCents: schema.offers.inboundCostCents,
           stockCoverDays: schema.offers.stockCoverDays,
+          successFeeRatePct: schema.offers.successFeeRatePct,
+          fulfilmentFeeCents: schema.offers.fulfilmentFeeCents,
         })
         .from(schema.offers)
         .where(
@@ -141,6 +146,10 @@ export async function processCalculateProfits(
               volumeCm3: offerRow.volumeCm3,
               weightGrams: offerRow.weightGrams,
               stockCoverDays: offerRow.stockCoverDays,
+              successFeeRatePct: offerRow.successFeeRatePct != null
+                ? parseFloat(offerRow.successFeeRatePct)
+                : null,
+              fulfilmentFeeCents: offerRow.fulfilmentFeeCents,
             };
             cogsPerUnitCents = offerRow.cogsCents ?? Math.round(offer.sellingPriceCents * DEFAULT_COGS_ESTIMATE_PCT);
             inboundCostPerUnitCents = offerRow.inboundCostCents ?? 0;
@@ -248,9 +257,16 @@ export async function processCalculateProfits(
         // "undercharged" rows. Skip those rather than mislead the seller.
         if (order.actualSuccessFeeCents != null || order.actualFulfilmentFeeCents != null || order.actualStockTransferFeeCents != null) {
           const offerData = order.offerIdNum ? offerRowsMap.get(order.offerIdNum) : null;
-          const successFeeReliable = offerData?.category != null;
+          // The success-fee calc is reliable when EITHER we have an explicit
+          // per-product rate (from Product Details CSV) OR a category for the
+          // table lookup. Same idea for fulfilment fee — explicit cents OR
+          // dimensions. Without any of these the calc falls back to defaults
+          // and the discrepancy is just noise.
+          const successFeeReliable =
+            offerData?.successFeeRatePct != null || offerData?.category != null;
           const fulfilmentFeeReliable =
-            offerData?.weightGrams != null && offerData?.volumeCm3 != null;
+            offerData?.fulfilmentFeeCents != null ||
+            (offerData?.weightGrams != null && offerData?.volumeCm3 != null);
           // Stock transfer fee is binary — either it's an IBT order or it isn't,
           // and we have that info from the order itself, so the calc is reliable.
           const stockTransferReliable = true;
