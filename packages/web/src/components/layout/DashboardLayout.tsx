@@ -19,11 +19,11 @@ import { SyncProgressBanner } from './SyncProgressBanner.js';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/dashboard/inventory', label: 'Inventory', icon: Warehouse },
-  { path: '/dashboard/alerts', label: 'Alerts', icon: Bell },
-  { path: '/dashboard/cogs', label: 'COGS', icon: PackageCheck },
   { path: '/dashboard/report-upload', label: 'Report Upload', icon: Upload },
+  { path: '/dashboard/cogs', label: 'COGS', icon: PackageCheck },
+  { path: '/dashboard/inventory', label: 'Inventory', icon: Warehouse },
   { path: '/dashboard/fees-insights', label: 'Fees & Insights', icon: Scale },
+  { path: '/dashboard/alerts', label: 'Alerts', icon: Bell },
   { path: '/dashboard/notifications', label: 'Notifications', icon: Settings },
 ];
 
