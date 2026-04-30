@@ -56,6 +56,26 @@ export function parseRandsToCents(value: string): number {
 }
 
 /**
+ * Parse a Rand amount to integer cents, distinguishing **empty / "-"** (no
+ * value yet) from a legitimate **"0.00"** (zero). The Takealot Sales Report
+ * leaves fee columns blank for orders that haven't shipped yet, and earlier
+ * we treated those as `0` — which made downstream fee-discrepancy detection
+ * fire false positives ("Takealot charged R0 but we calculated R3,000")
+ * for every unshipped order.
+ *
+ * - Empty cell or "-" → null
+ * - "0.00" or "0"     → 0
+ * - "150.00"          → 15000
+ * - unparseable       → null
+ */
+export function parseRandsToCentsOrNull(value: string): number | null {
+  if (!value || value.trim() === '' || value.trim() === '-') return null;
+  const cleaned = value.replace(/[R\s]/g, '').replace(/,/g, '');
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? null : Math.round(num * 100);
+}
+
+/**
  * Parse a date string in common Takealot formats:
  *   "2026-03-18" or "2026/03/18" or "18 Mar 2026" or "03/18/2026"
  */

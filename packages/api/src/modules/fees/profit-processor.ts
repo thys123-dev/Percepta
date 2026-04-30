@@ -334,12 +334,20 @@ async function detectFeeDiscrepancies(
   }> = [];
 
   for (const [feeType, { actual, calculated }] of Object.entries(fees)) {
-    if (actual == null) continue; // No actual data for this fee type
+    if (actual == null) continue; // No actual data for this fee type yet
+    // Skip rows where Takealot booked R0 — these are either promotional fee
+    // waivers (good news, not a discrepancy worth flagging) or stock-transfer
+    // fees on non-IBT orders (always legitimately zero). Earlier we treated
+    // these as "Takealot undercharged us" which produced thousands of false
+    // positives once unshipped orders started flowing through with blank fee
+    // columns — now those land as null instead of zero, and any remaining
+    // zeros are real ones we don't want to flag.
+    if (actual === 0) continue;
 
     const discrepancy = actual - calculated;
-    const pct = actual !== 0 ? Math.round(Math.abs(discrepancy) / Math.abs(actual) * 10000) / 100 : 0;
+    const pct = Math.round(Math.abs(discrepancy) / Math.abs(actual) * 10000) / 100;
 
-    if (pct > THRESHOLD_PCT || (actual === 0 && calculated > 0) || (actual > 0 && calculated === 0)) {
+    if (pct > THRESHOLD_PCT || calculated === 0) {
       rows.push({
         sellerId,
         orderId,

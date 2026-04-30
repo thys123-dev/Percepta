@@ -35,6 +35,7 @@
 import {
   splitCsvLine,
   parseRandsToCents,
+  parseRandsToCentsOrNull,
   parseDate,
   parseDateOrNull,
   parseIntOrNull,
@@ -57,11 +58,16 @@ export interface SalesReportRow {
   customerDc: string;
   grossSalesCents: number;
   dailyDealPromo: string;
-  successFeeCents: number;
-  fulfilmentFeeCents: number;
-  courierCollectionFeeCents: number;
-  stockTransferFeeCents: number;
-  netSalesAmountCents: number;
+  /**
+   * Fees in the CSV are blank/"-" for orders Takealot hasn't shipped yet.
+   * We preserve that distinction as `null` so the discrepancy detector knows
+   * to skip the row instead of flagging "actual = R0 vs calculated = R3,000".
+   */
+  successFeeCents: number | null;
+  fulfilmentFeeCents: number | null;
+  courierCollectionFeeCents: number | null;
+  stockTransferFeeCents: number | null;
+  netSalesAmountCents: number | null;
   shipmentName: string;
   poNumber: string;
   dateShippedToCustomer: Date | null;
@@ -185,11 +191,13 @@ export function parseSalesReportCsv(csvText: string): SalesReportParseResult {
         customerDc: get('Customer DC'),
         grossSalesCents: parseRandsToCents(get('Gross Sales')),
         dailyDealPromo: get('Sold On Daily Deal/Promo'),
-        successFeeCents: parseRandsToCents(get('Success Fee')),
-        fulfilmentFeeCents: parseRandsToCents(get('Fulfilment Fee')),
-        courierCollectionFeeCents: parseRandsToCents(get('Courier Collection Fee')),
-        stockTransferFeeCents: parseRandsToCents(get('Stock Transfer Fee')),
-        netSalesAmountCents: parseRandsToCents(get('Net Sales Amount')),
+        // Fee columns: blank for unshipped orders → null (so we don't compare
+        // R0 against our calculated estimate). "0.00" still parses as 0.
+        successFeeCents: parseRandsToCentsOrNull(get('Success Fee')),
+        fulfilmentFeeCents: parseRandsToCentsOrNull(get('Fulfilment Fee')),
+        courierCollectionFeeCents: parseRandsToCentsOrNull(get('Courier Collection Fee')),
+        stockTransferFeeCents: parseRandsToCentsOrNull(get('Stock Transfer Fee')),
+        netSalesAmountCents: parseRandsToCentsOrNull(get('Net Sales Amount')),
         shipmentName: get('Shipment Name'),
         poNumber: get('PO Number'),
         dateShippedToCustomer: parseDateOrNull(get('Date Shipped to Customer')),

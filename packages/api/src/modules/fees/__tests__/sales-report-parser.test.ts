@@ -181,8 +181,16 @@ describe('parseSalesReportCsv', () => {
     expect(result.errors[0]!.message).toContain('Invalid Qty');
   });
 
-  it('handles empty/missing fee values as 0', () => {
+  it('treats empty/missing fee cells as null (not 0) so unshipped orders skip discrepancy detection', () => {
     const csv = `${HEADER}\n${makeCsvRow({ courierCollectionFee: '', stockTransferFee: '' })}`;
+    const result = parseSalesReportCsv(csv);
+
+    expect(result.rows[0]!.courierCollectionFeeCents).toBeNull();
+    expect(result.rows[0]!.stockTransferFeeCents).toBeNull();
+  });
+
+  it('still parses "0.00" as 0 (legitimate zero, not a missing value)', () => {
+    const csv = `${HEADER}\n${makeCsvRow({ courierCollectionFee: '0.00', stockTransferFee: '0.00' })}`;
     const result = parseSalesReportCsv(csv);
 
     expect(result.rows[0]!.courierCollectionFeeCents).toBe(0);

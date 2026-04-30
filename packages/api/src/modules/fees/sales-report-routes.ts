@@ -143,14 +143,16 @@ export async function salesReportRoutes(server: FastifyInstance) {
 
     // ── Preview mode ──
     if (mode === 'preview') {
+      // Treat null fees (unshipped orders) as 0 in the preview totals — these
+      // are pending values that will fill in once Takealot bills the order.
       const totalActualFees = matched.reduce(
         (acc, m) => ({
-          successFee: acc.successFee + m.csvRow.successFeeCents,
-          fulfilmentFee: acc.fulfilmentFee + m.csvRow.fulfilmentFeeCents,
-          courierCollectionFee: acc.courierCollectionFee + m.csvRow.courierCollectionFeeCents,
-          stockTransferFee: acc.stockTransferFee + m.csvRow.stockTransferFeeCents,
+          successFee: acc.successFee + (m.csvRow.successFeeCents ?? 0),
+          fulfilmentFee: acc.fulfilmentFee + (m.csvRow.fulfilmentFeeCents ?? 0),
+          courierCollectionFee: acc.courierCollectionFee + (m.csvRow.courierCollectionFeeCents ?? 0),
+          stockTransferFee: acc.stockTransferFee + (m.csvRow.stockTransferFeeCents ?? 0),
           grossSales: acc.grossSales + m.csvRow.grossSalesCents,
-          netSales: acc.netSales + m.csvRow.netSalesAmountCents,
+          netSales: acc.netSales + (m.csvRow.netSalesAmountCents ?? 0),
         }),
         { successFee: 0, fulfilmentFee: 0, courierCollectionFee: 0, stockTransferFee: 0, grossSales: 0, netSales: 0 }
       );
