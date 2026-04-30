@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 
@@ -13,7 +13,8 @@ import { ResetPasswordPage } from './pages/ResetPasswordPage';
 const DashboardPage    = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
 const AlertsPage       = lazy(() => import('./pages/AlertsPage').then((m) => ({ default: m.AlertsPage })));
 const CogsPage         = lazy(() => import('./pages/CogsPage').then((m) => ({ default: m.CogsPage })));
-const FeeAuditPage     = lazy(() => import('./pages/FeeAuditPage').then((m) => ({ default: m.FeeAuditPage })));
+const ReportUploadPage = lazy(() => import('./pages/ReportUploadPage').then((m) => ({ default: m.ReportUploadPage })));
+const FeesInsightsPage = lazy(() => import('./pages/FeesInsightsPage').then((m) => ({ default: m.FeesInsightsPage })));
 const InventoryPage    = lazy(() => import('./pages/InventoryPage').then((m) => ({ default: m.InventoryPage })));
 const OnboardingPage   = lazy(() => import('./pages/OnboardingPage').then((m) => ({ default: m.OnboardingPage })));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
@@ -24,6 +25,28 @@ function PageLoader() {
       <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
     </div>
   );
+}
+
+/**
+ * The /dashboard/fee-audit page was split into Report Upload (data import)
+ * and Fees & Insights (analysis). Preserve old deep links by mapping each
+ * tab key to the page that now owns it.
+ */
+const FEE_AUDIT_TAB_TO_PAGE: Record<string, string> = {
+  upload: '/dashboard/report-upload?tab=upload',
+  'acct-transactions': '/dashboard/report-upload?tab=acct-transactions',
+  'returns-import': '/dashboard/report-upload?tab=returns-import',
+  history: '/dashboard/report-upload?tab=history',
+  discrepancies: '/dashboard/fees-insights?tab=discrepancies',
+  'by-product': '/dashboard/fees-insights?tab=by-product',
+  insights: '/dashboard/fees-insights?tab=insights',
+};
+
+function LegacyFeeAuditRedirect() {
+  const [params] = useSearchParams();
+  const requested = params.get('tab');
+  const target = (requested && FEE_AUDIT_TAB_TO_PAGE[requested]) ?? '/dashboard/report-upload';
+  return <Navigate to={target} replace />;
 }
 
 function App() {
@@ -79,13 +102,23 @@ function App() {
             }
           />
           <Route
-            path="fee-audit"
+            path="report-upload"
             element={
               <Suspense fallback={<PageLoader />}>
-                <FeeAuditPage />
+                <ReportUploadPage />
               </Suspense>
             }
           />
+          <Route
+            path="fees-insights"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <FeesInsightsPage />
+              </Suspense>
+            }
+          />
+          {/* Legacy URL — preserve any bookmarked /dashboard/fee-audit?tab=... link */}
+          <Route path="fee-audit" element={<LegacyFeeAuditRedirect />} />
           <Route
             path="notifications"
             element={

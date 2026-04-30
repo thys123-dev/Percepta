@@ -7,6 +7,7 @@ import {
   Settings,
   LogOut,
   TrendingUp,
+  Upload,
   Warehouse,
   Wifi,
   WifiOff,
@@ -21,7 +22,8 @@ const navItems = [
   { path: '/dashboard/inventory', label: 'Inventory', icon: Warehouse },
   { path: '/dashboard/alerts', label: 'Alerts', icon: Bell },
   { path: '/dashboard/cogs', label: 'COGS', icon: PackageCheck },
-  { path: '/dashboard/fee-audit', label: 'Fee Audit', icon: Scale },
+  { path: '/dashboard/report-upload', label: 'Report Upload', icon: Upload },
+  { path: '/dashboard/fees-insights', label: 'Fees & Insights', icon: Scale },
   { path: '/dashboard/notifications', label: 'Notifications', icon: Settings },
 ];
 

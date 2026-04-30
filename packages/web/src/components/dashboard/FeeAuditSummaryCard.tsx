@@ -38,7 +38,7 @@ export function FeeAuditSummaryCard() {
             </div>
           </div>
           <Link
-            to="/dashboard/fee-audit"
+            to="/dashboard/fees-insights?tab=discrepancies"
             className="inline-flex items-center gap-1 text-sm font-medium text-green-700 hover:text-green-800"
           >
             View
@@ -86,7 +86,7 @@ export function FeeAuditSummaryCard() {
           </div>
         </div>
         <Link
-          to="/dashboard/fee-audit"
+          to="/dashboard/fees-insights?tab=discrepancies"
           className={`inline-flex items-center gap-1 text-sm font-medium ${linkColor} whitespace-nowrap`}
         >
           Review

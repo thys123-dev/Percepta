@@ -32,8 +32,8 @@ const VIEW_TABS: { key: ReturnsView; label: string; hint: string }[] = [
   { key: 'pending', label: 'Pending', hint: 'Flagged by Takealot, awaiting CSV reconciliation' },
 ];
 
-const IMPORT_CSV_HREF = '/dashboard/fee-audit?tab=acct-transactions';
-const IMPORT_RETURNS_HREF = '/dashboard/fee-audit?tab=returns-import';
+const IMPORT_CSV_HREF = '/dashboard/report-upload?tab=acct-transactions';
+const IMPORT_RETURNS_HREF = '/dashboard/report-upload?tab=returns-import';
 
 // Reason strings are kept verbatim from the Takealot export.
 const REASON_BADGE_COLOURS: Record<string, string> = {
