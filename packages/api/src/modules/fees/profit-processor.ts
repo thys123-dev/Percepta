@@ -9,7 +9,7 @@
  */
 
 import type { Job } from 'bullmq';
-import { eq, and, inArray, isNotNull } from 'drizzle-orm';
+import { eq, and, inArray, isNotNull, sql } from 'drizzle-orm';
 import { db, schema } from '../../db/index.js';
 import {
   calculateFees,
@@ -238,11 +238,39 @@ export async function processCalculateProfits(
         if (!profitResult.isProfitable) lossMakers++;
 
         // ── Fee discrepancy detection (when CSV actual fees are available) ──
+        //
+        // We only generate discrepancy rows when our calculator had reliable
+        // inputs. Without a category, the success-fee calc falls back to a 12%
+        // default that's wildly off for most products (real Takealot rates
+        // sit around 8–10%); without dimensions, the fulfilment-fee calc
+        // falls back to a placeholder size tier. Comparing those defaults
+        // against Takealot's actual charges produced thousands of bogus
+        // "undercharged" rows. Skip those rather than mislead the seller.
         if (order.actualSuccessFeeCents != null || order.actualFulfilmentFeeCents != null || order.actualStockTransferFeeCents != null) {
+          const offerData = order.offerIdNum ? offerRowsMap.get(order.offerIdNum) : null;
+          const successFeeReliable = offerData?.category != null;
+          const fulfilmentFeeReliable =
+            offerData?.weightGrams != null && offerData?.volumeCm3 != null;
+          // Stock transfer fee is binary — either it's an IBT order or it isn't,
+          // and we have that info from the order itself, so the calc is reliable.
+          const stockTransferReliable = true;
+
           detectFeeDiscrepancies(sellerId, order.orderId, {
-            successFee: { actual: order.actualSuccessFeeCents, calculated: feeBreakdown.successFeeTotalCents },
-            fulfilmentFee: { actual: order.actualFulfilmentFeeCents, calculated: feeBreakdown.fulfilmentFeeTotalCents },
-            stockTransferFee: { actual: order.actualStockTransferFeeCents, calculated: feeBreakdown.ibtPenaltyTotalCents },
+            successFee: {
+              actual: order.actualSuccessFeeCents,
+              calculated: feeBreakdown.successFeeTotalCents,
+              isReliable: successFeeReliable,
+            },
+            fulfilmentFee: {
+              actual: order.actualFulfilmentFeeCents,
+              calculated: feeBreakdown.fulfilmentFeeTotalCents,
+              isReliable: fulfilmentFeeReliable,
+            },
+            stockTransferFee: {
+              actual: order.actualStockTransferFeeCents,
+              calculated: feeBreakdown.ibtPenaltyTotalCents,
+              isReliable: stockTransferReliable,
+            },
           }).catch((err: Error) =>
             console.error(`[discrepancy] check failed: ${err.message}`)
           );
@@ -314,12 +342,21 @@ function buildDefaultOfferInput(order: {
 
 /**
  * Detect and store fee discrepancies between Takealot's actual fees (from CSV)
- * and our calculated estimates. Only creates rows for significant discrepancies (>5%).
+ * and our calculated estimates. Only creates rows for significant discrepancies
+ * (>5%) and only when our calc had reliable inputs.
+ *
+ * Re-runs are idempotent: the unique index on (seller_id, order_id, fee_type)
+ * lets us upsert calc fields in place. We deliberately do NOT touch the
+ * status / resolvedNote / resolvedAt fields so a seller's "acknowledged" or
+ * "disputed" decision survives subsequent profit recalcs.
  */
 async function detectFeeDiscrepancies(
   sellerId: string,
   orderId: string,
-  fees: Record<string, { actual: number | null; calculated: number }>
+  fees: Record<
+    string,
+    { actual: number | null; calculated: number; isReliable?: boolean }
+  >
 ): Promise<void> {
   const THRESHOLD_PCT = 5; // Only flag discrepancies > 5%
 
@@ -333,15 +370,16 @@ async function detectFeeDiscrepancies(
     discrepancyPct: string;
   }> = [];
 
-  for (const [feeType, { actual, calculated }] of Object.entries(fees)) {
+  for (const [feeType, { actual, calculated, isReliable }] of Object.entries(fees)) {
     if (actual == null) continue; // No actual data for this fee type yet
+    // Skip rows where our calculator had unreliable inputs (e.g. no category
+    // → success fee falls back to a 12% default; no dimensions → fulfilment
+    // fee uses a placeholder tier). The mismatch isn't a real discrepancy,
+    // it's a known data gap — surfacing it just adds noise.
+    if (isReliable === false) continue;
     // Skip rows where Takealot booked R0 — these are either promotional fee
     // waivers (good news, not a discrepancy worth flagging) or stock-transfer
-    // fees on non-IBT orders (always legitimately zero). Earlier we treated
-    // these as "Takealot undercharged us" which produced thousands of false
-    // positives once unshipped orders started flowing through with blank fee
-    // columns — now those land as null instead of zero, and any remaining
-    // zeros are real ones we don't want to flag.
+    // fees on non-IBT orders (always legitimately zero).
     if (actual === 0) continue;
 
     const discrepancy = actual - calculated;
@@ -364,6 +402,20 @@ async function detectFeeDiscrepancies(
     await db
       .insert(schema.feeDiscrepancies)
       .values(rows)
-      .onConflictDoNothing(); // safe to re-run
+      .onConflictDoUpdate({
+        target: [
+          schema.feeDiscrepancies.sellerId,
+          schema.feeDiscrepancies.orderId,
+          schema.feeDiscrepancies.feeType,
+        ],
+        // Update calc fields only — status / resolvedNote / resolvedAt are
+        // user-managed and must not be reset by an automated re-run.
+        set: {
+          actualCents: sql`excluded.actual_cents`,
+          calculatedCents: sql`excluded.calculated_cents`,
+          discrepancyCents: sql`excluded.discrepancy_cents`,
+          discrepancyPct: sql`excluded.discrepancy_pct`,
+        },
+      });
   }
 }

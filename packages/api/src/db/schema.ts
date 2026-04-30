@@ -366,6 +366,13 @@ export const feeDiscrepancies = pgTable(
   (table) => [
     index('discrepancies_seller_idx').on(table.sellerId),
     index('discrepancies_seller_status_idx').on(table.sellerId, table.status),
+    // One discrepancy row per (seller, order, fee_type) — used as the upsert
+    // target so re-runs of the profit processor don't accumulate duplicates.
+    uniqueIndex('fee_discrepancies_seller_order_fee_unique').on(
+      table.sellerId,
+      table.orderId,
+      table.feeType
+    ),
   ]
 );
 
