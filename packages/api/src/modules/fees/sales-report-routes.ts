@@ -429,7 +429,11 @@ export async function salesReportRoutes(server: FastifyInstance) {
         totalOverchargedCents: sql<number>`COALESCE(SUM(CASE WHEN ${schema.feeDiscrepancies.discrepancyCents} > 0 THEN ${schema.feeDiscrepancies.discrepancyCents} ELSE 0 END), 0)::int`,
         totalUnderchargedCents: sql<number>`COALESCE(SUM(CASE WHEN ${schema.feeDiscrepancies.discrepancyCents} < 0 THEN ABS(${schema.feeDiscrepancies.discrepancyCents}) ELSE 0 END), 0)::int`,
         netImpactCents: sql<number>`COALESCE(SUM(${schema.feeDiscrepancies.discrepancyCents}), 0)::int`,
-        avgDiscrepancyPct: sql<number>`ROUND(AVG(ABS(${schema.feeDiscrepancies.discrepancyPct}::float)), 1)`,
+        // discrepancyPct is decimal(7,2) — Postgres' ROUND(numeric, integer) works
+        // directly. An earlier ::float cast broke this because there's no
+        // ROUND(double precision, integer) overload, leaving the whole tab
+        // returning a 500.
+        avgDiscrepancyPct: sql<number>`ROUND(AVG(ABS(${schema.feeDiscrepancies.discrepancyPct})), 1)`,
       })
       .from(schema.feeDiscrepancies)
       .innerJoin(schema.orders, eq(schema.feeDiscrepancies.orderId, schema.orders.id))
