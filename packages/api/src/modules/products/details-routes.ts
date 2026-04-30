@@ -163,31 +163,73 @@ export async function productDetailsRoutes(server: FastifyInstance) {
       const updatedOfferIds: number[] = [];
 
       try {
-        for (const { row, offerId } of matchedRows) {
-          // Build a partial update — only set fields the CSV had a value for,
-          // so we never overwrite better data with NULL.
-          const updates: Record<string, unknown> = { updatedAt: new Date() };
-          if (row.category != null) updates.category = row.category;
-          if (row.brand != null) updates.brand = row.brand;
-          if (row.weightGrams != null) updates.weightGrams = row.weightGrams;
-          if (row.lengthMm != null) updates.lengthMm = row.lengthMm;
-          if (row.widthMm != null) updates.widthMm = row.widthMm;
-          if (row.heightMm != null) updates.heightMm = row.heightMm;
-          if (row.volumeCm3 != null) updates.volumeCm3 = row.volumeCm3;
-          if (row.successFeeRatePct != null)
-            updates.successFeeRatePct = row.successFeeRatePct.toString();
-          if (row.fulfilmentFeeCents != null) updates.fulfilmentFeeCents = row.fulfilmentFeeCents;
+        // Build the per-offer payload up front. Skip rows that have no useful
+        // data — `updatedAt` alone doesn't justify a write.
+        const updatePayloads = matchedRows
+          .map(({ row, offerId }) => ({
+            offer_id: offerId,
+            category: row.category,
+            brand: row.brand,
+            weight_grams: row.weightGrams,
+            length_mm: row.lengthMm,
+            width_mm: row.widthMm,
+            height_mm: row.heightMm,
+            volume_cm3: row.volumeCm3,
+            // jsonb numeric stays numeric — we cast it back to text in the
+            // jsonb_to_recordset definition because Drizzle's decimal column
+            // type round-trips as a string.
+            success_fee_rate_pct:
+              row.successFeeRatePct != null ? row.successFeeRatePct : null,
+            fulfilment_fee_cents: row.fulfilmentFeeCents,
+          }))
+          .filter(
+            (p) =>
+              p.category != null ||
+              p.brand != null ||
+              p.weight_grams != null ||
+              p.length_mm != null ||
+              p.width_mm != null ||
+              p.height_mm != null ||
+              p.volume_cm3 != null ||
+              p.success_fee_rate_pct != null ||
+              p.fulfilment_fee_cents != null
+          );
 
-          if (Object.keys(updates).length === 1) continue; // only updatedAt
-
-          await db
-            .update(schema.offers)
-            .set(updates)
-            .where(
-              and(eq(schema.offers.sellerId, sellerId), eq(schema.offers.offerId, offerId))
-            );
-
-          updatedOfferIds.push(offerId);
+        // Bulk UPDATE in a single round-trip via jsonb_to_recordset. 766
+        // sequential UPDATEs against the remote Railway DB took ~25s and
+        // exceeded the request timeout — this finishes in one statement.
+        // We chunk at 1,000 rows just to stay well under PG's parameter limits.
+        if (updatePayloads.length > 0) {
+          for (const chunk of chunkArray(updatePayloads, 1000)) {
+            await db.execute(sql`
+              UPDATE offers AS o SET
+                category             = COALESCE(d.category, o.category),
+                brand                = COALESCE(d.brand, o.brand),
+                weight_grams         = COALESCE(d.weight_grams, o.weight_grams),
+                length_mm            = COALESCE(d.length_mm, o.length_mm),
+                width_mm             = COALESCE(d.width_mm, o.width_mm),
+                height_mm            = COALESCE(d.height_mm, o.height_mm),
+                volume_cm3           = COALESCE(d.volume_cm3, o.volume_cm3),
+                success_fee_rate_pct = COALESCE(d.success_fee_rate_pct, o.success_fee_rate_pct),
+                fulfilment_fee_cents = COALESCE(d.fulfilment_fee_cents, o.fulfilment_fee_cents),
+                updated_at           = NOW()
+              FROM jsonb_to_recordset(${JSON.stringify(chunk)}::jsonb) AS d(
+                offer_id              int,
+                category              varchar,
+                brand                 varchar,
+                weight_grams          int,
+                length_mm             int,
+                width_mm              int,
+                height_mm             int,
+                volume_cm3            int,
+                success_fee_rate_pct  numeric,
+                fulfilment_fee_cents  int
+              )
+              WHERE o.seller_id = ${sellerId}
+                AND o.offer_id  = d.offer_id
+            `);
+            for (const p of chunk) updatedOfferIds.push(p.offer_id);
+          }
         }
 
         await db
@@ -222,19 +264,23 @@ export async function productDetailsRoutes(server: FastifyInstance) {
             });
           }
 
-          // Also delete any previously-stored fee discrepancies for these
-          // orders that were generated under unreliable inputs (no category /
-          // no dims). The recalc will regenerate the correct ones.
-          await db.execute(sql`
-            DELETE FROM fee_discrepancies
-            WHERE seller_id = ${sellerId}
-              AND status = 'open'
-              AND order_id IN (
-                SELECT id FROM orders
-                WHERE seller_id = ${sellerId}
-                  AND offer_id = ANY(${updatedOfferIds})
-              )
-          `);
+          // Also delete any existing OPEN fee discrepancies for these orders
+          // — they were generated under unreliable inputs (no category / no
+          // dims). The recalc will regenerate clean ones using the new rates.
+          // Acknowledged / disputed rows are left alone.
+          if (orderIds.length > 0) {
+            for (const chunk of chunkArray(orderIds, 500)) {
+              await db
+                .delete(schema.feeDiscrepancies)
+                .where(
+                  and(
+                    eq(schema.feeDiscrepancies.sellerId, sellerId),
+                    eq(schema.feeDiscrepancies.status, 'open'),
+                    inArray(schema.feeDiscrepancies.orderId, chunk)
+                  )
+                );
+            }
+          }
         }
 
         return {
