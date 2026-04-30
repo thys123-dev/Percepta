@@ -87,9 +87,28 @@ function getPeriodDates(
   return { start, end };
 }
 
-function calcDelta(current: number, previous: number): number {
-  if (previous === 0) return current > 0 ? 100 : 0;
-  return Math.round(((current - previous) / Math.abs(previous)) * 1000) / 10;
+/**
+ * Period-over-period delta. Returns null when the previous-period base is
+ * too small to make the comparison meaningful — first-time sellers see
+ * "+12,413%" otherwise, which the UI now renders as "Building baseline"
+ * instead.
+ *
+ * The "unreliable" rule combines two conditions so a genuine 5× growth on
+ * a stable base still shows correctly:
+ *   - previous-period base is < 10% of current-period base, AND
+ *   - the % change exceeds 200%
+ * Either condition alone is fine; only their combination signals a low-base
+ * artifact.
+ */
+function calcDelta(current: number, previous: number): number | null {
+  if (previous === 0) {
+    // Can't divide; treat as unreliable when current is non-trivially populated.
+    return current === 0 ? 0 : null;
+  }
+  const pct = Math.round(((current - previous) / Math.abs(previous)) * 1000) / 10;
+  const baseShare = Math.abs(previous) / Math.max(Math.abs(current), 1);
+  if (baseShare < 0.1 && Math.abs(pct) > 200) return null;
+  return pct;
 }
 
 function getMarginStatus(

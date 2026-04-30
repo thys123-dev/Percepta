@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Hourglass } from 'lucide-react';
 import { clsx } from 'clsx';
 import { formatDelta } from '../../utils/format.js';
 
@@ -7,8 +7,14 @@ interface MetricCardProps {
   /** Pre-formatted display value (e.g. "R45.6k") */
   value: string;
   loading?: boolean;
-  /** Period-over-period delta. Drives the trend arrow + colour. */
-  trend?: number;
+  /**
+   * Period-over-period delta. Drives the trend arrow + colour.
+   *   - number: render the value
+   *   - null:   render the "Building baseline" placeholder (used when the
+   *             previous-period base is too small for a meaningful comparison)
+   *   - undefined: omit the trend line entirely
+   */
+  trend?: number | null;
   /** Unit for the trend value: '%' (default) or 'pp' for percentage points */
   trendSuffix?: 'pp' | '%';
   /** Small text below the trend arrow (e.g. "vs prev 30d") */
@@ -30,8 +36,10 @@ export function MetricCard({
   badge,
 }: MetricCardProps) {
   const hasTrend = trend !== undefined;
-  const isUp = hasTrend && trend > 0;
-  const isDown = hasTrend && trend < 0;
+  const trendUnreliable = trend === null;
+  const trendNumber = typeof trend === 'number' ? trend : null;
+  const isUp = trendNumber !== null && trendNumber > 0;
+  const isDown = trendNumber !== null && trendNumber < 0;
 
   return (
     <div className="metric-card">
@@ -49,7 +57,17 @@ export function MetricCard({
       )}
 
       {/* Trend */}
-      {hasTrend && (
+      {hasTrend && trendUnreliable && (
+        <div
+          className="flex items-center gap-1 text-sm font-normal text-gray-400"
+          title="The previous period had too little data to make a reliable comparison. This will populate once you have ~60 days of history."
+        >
+          <Hourglass className="h-3.5 w-3.5" />
+          <span>Building baseline</span>
+        </div>
+      )}
+
+      {hasTrend && trendNumber !== null && (
         <div
           className={clsx('flex items-center gap-1 text-sm font-medium', {
             'text-green-600': isUp,
@@ -60,7 +78,7 @@ export function MetricCard({
           {isUp && <TrendingUp className="h-3.5 w-3.5" />}
           {isDown && <TrendingDown className="h-3.5 w-3.5" />}
           {!isUp && !isDown && <Minus className="h-3.5 w-3.5" />}
-          <span>{formatDelta(trend!, trendSuffix)}</span>
+          <span>{formatDelta(trendNumber, trendSuffix)}</span>
           {trendLabel && (
             <span className="font-normal text-gray-400">{trendLabel}</span>
           )}

@@ -38,8 +38,14 @@ export interface DashboardSummaryData {
   productCount: number;
   lossMakerCount: number;
   trends: {
-    revenueDelta: number;
-    profitDelta: number;
+    /**
+     * Period-over-period % change for revenue. `null` when the previous-period
+     * base is too small to make the comparison meaningful — UI shows
+     * "Building baseline" instead of a misleading 12,000% number.
+     */
+    revenueDelta: number | null;
+    profitDelta: number | null;
+    /** Margin delta is in percentage points, not %, so it's safe even with tiny bases. */
     marginDelta: number;
   };
 }
